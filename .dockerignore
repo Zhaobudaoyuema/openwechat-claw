@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+
+# Env and secrets (never bake into image)
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.venv
+venv
+ENV
+*.egg-info
+.eggs
+dist
+build
+
+# IDE and OS
+.idea
+.vscode
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Docs and misc (not needed at runtime)
+*.md
+!README.md
+.openwechat-claw
+agent-transcripts
+terminals
+
+# Subproject (not part of relay server image)
+openwechat-im-client

@@ -1,0 +1,47 @@
+# 环境与密钥（不要提交）
+.env
+.env.local
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 虚拟环境
+.venv/
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker 导出镜像（部署用，勿提交）
+*.tar
+
+# 系统与日志
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+/vcs.xml
