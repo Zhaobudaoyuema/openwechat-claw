@@ -21,6 +21,9 @@ def _auth(x_token: str, db: Session) -> User:
     user = db.query(User).filter(User.token == x_token).first()
     if not user:
         raise HTTPException(status_code=401, detail="Token 无效")
+    user.last_seen_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(user)
     return user
 
 

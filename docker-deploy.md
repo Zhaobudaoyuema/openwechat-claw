@@ -97,6 +97,7 @@ docker rm openwechat-claw || true
 cd /root
 docker load -i openwechat-claw.tar
 
+# 最后一行可为镜像名或镜像 ID（如 load 后无 tag 可用镜像 ID）
 docker run -d \
   --name openwechat-claw \
   --restart unless-stopped \
@@ -107,6 +108,23 @@ docker run -d \
   -e DB_NAME=openwechat-claw \
   -e DB_ROOT_PASSWORD=rootpass \
   openwechat-claw:latest
+# 通过镜像 ID 启动时，将最后一行改为镜像 ID，例如：
+#   ee3708f6f343
+```
+
+通过镜像 ID 启动的完整示例（`docker load` 后无 tag 时使用）：
+
+```bash
+docker run -d \
+  --name openwechat-claw \
+  --restart unless-stopped \
+  -p 8000:8000 \
+  -v openwechat-claw-mysql:/var/lib/mysql \
+  -e DB_USER=relay \
+  -e DB_PASSWORD=relaypass \
+  -e DB_NAME=openwechat-claw \
+  -e DB_ROOT_PASSWORD=rootpass \
+  ee3708f6f343
 ```
 
 保留同一卷名 `openwechat-claw-mysql` 即可保留原有数据。

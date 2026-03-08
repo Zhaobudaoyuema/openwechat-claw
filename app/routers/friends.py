@@ -1,9 +1,8 @@
-import math
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import PlainTextResponse
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, text
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -26,6 +25,9 @@ def _auth(x_token: str, db: Session) -> User:
     user = db.query(User).filter(User.token == x_token).first()
     if not user:
         raise HTTPException(status_code=401, detail="Token 无效")
+    user.last_seen_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(user)
     return user
 
 
@@ -38,48 +40,55 @@ def _beijing(dt: datetime) -> str:
 def _user_line(u: User) -> str:
     desc = u.description or "（无）"
     label = _STATUS_LABEL.get(u.status, u.status)
+    last_seen = _beijing(u.last_seen_at or u.created_at)
     return (
         f"{u.name}（ID:{u.id}）\n"
         f"    简介：{desc}\n"
         f"    状态：{label}\n"
-        f"    注册时间：{_beijing(u.created_at)}"
+        f"    注册时间：{_beijing(u.created_at)}\n"
+        f"    最后活跃：{last_seen}"
     )
 
 
 # ── Discovery ────────────────────────────────────────────────────────────────
 
+DISCOVER_PAGE_SIZE = 10
+
+
 @router.get("/users")
 def discover_users(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=200),
+    keyword: str | None = Query(None, description="按名称或简介关键词搜索"),
     x_token: str = Header(..., alias="X-Token"),
     db: Session = Depends(get_db),
 ) -> PlainTextResponse:
     """
-    返回状态为「可交流」的用户列表（不含自己）。
-
-    - page      : 页码，从 1 开始
-    - page_size : 每页条数，默认 50
+    每次发现随机 10 个状态为「可交流」的用户（不含自己）。
+    可选 keyword：在名称、简介中模糊匹配。
     """
     me = _auth(x_token, db)
 
     base_q = db.query(User).filter(User.id != me.id, User.status == "open")
+    if keyword and keyword.strip():
+        k = f"%{keyword.strip()}%"
+        base_q = base_q.filter(
+            or_(
+                User.name.ilike(k),
+                (User.description.isnot(None)) & (User.description.ilike(k)),
+            )
+        )
     total = base_q.count()
 
     if total == 0:
         return PlainTextResponse("暂无可交流的用户")
 
-    total_pages = math.ceil(total / page_size)
-    page = max(1, min(page, total_pages))
-    offset = (page - 1) * page_size
-
-    users = base_q.order_by(User.created_at.desc()).offset(offset).limit(page_size).all()
-
-    summary = (
-        f"可交流用户共 {total} 人 | "
-        f"第 {page} 页 / 共 {total_pages} 页（每页 {page_size} 条）"
+    users = (
+        base_q.order_by(text("RAND()"))
+        .limit(DISCOVER_PAGE_SIZE)
+        .all()
     )
-    parts = [f"[{offset + i + 1}] {_user_line(u)}" for i, u in enumerate(users)]
+
+    summary = f"本次随机展示 {len(users)} 人（可交流用户共 {total} 人）"
+    parts = [f"[{i + 1}] {_user_line(u)}" for i, u in enumerate(users)]
     body = f"\n{_SEP}\n".join(parts)
     return PlainTextResponse(f"{summary}\n{'═' * 40}\n{body}\n{'═' * 40}")
 
@@ -136,10 +145,12 @@ def list_friends(
     for fid, row in pairs:
         friend = friend_map.get(fid)
         if friend:
+            last_seen = _beijing(friend.last_seen_at or friend.created_at)
             parts.append(
                 f"[{len(parts) + 1}] {friend.name}（ID:{friend.id}）\n"
                 f"    简介：{friend.description or '（无）'}\n"
-                f"    好友建立时间：{_beijing(row.updated_at)}"
+                f"    好友建立时间：{_beijing(row.updated_at)}\n"
+                f"    最后活跃：{last_seen}"
             )
 
     body = f"\n{_SEP}\n".join(parts)
