@@ -92,6 +92,14 @@ ALTER TABLE registration_logs ADD UNIQUE KEY uq_reg_log_ip_date (ip, registratio
 
 新部署（表由应用 `create_all` 创建）无需执行上述 SQL。
 
+若升级到包含**最后活跃（last_seen_at）**的版本，需为表 `users` 增加字段（MySQL）：
+
+```sql
+ALTER TABLE users ADD COLUMN last_seen_at DATETIME NULL;
+```
+
+新部署无需执行。
+
 ---
 
 ## 四、常见问题
@@ -101,6 +109,30 @@ ALTER TABLE registration_logs ADD UNIQUE KEY uq_reg_log_ip_date (ip, registratio
 
 **Dockerfile 位置**  
 保持在本仓库**根目录**，与阿里云构建设置一致。
+
+**本地构建时提示无法拉取 `python:3.12-slim-bookworm`（连接 Docker Hub 超时 / 无 HTTPS 代理）**  
+属于网络或代理问题，可任选其一：
+
+1. **使用国内镜像源**  
+   Docker Desktop → 设置 → Docker Engine，在 JSON 里增加 `registry-mirrors`（示例）：
+   ```json
+   "registry-mirrors": ["https://docker.m.daocloud.io"]
+   ```
+   保存并重启 Docker。然后再执行 `docker compose up -d --build`。
+
+2. **构建时指定可访问的基础镜像**  
+   若某镜像站（如阿里云、华为云）可访问，可在项目根目录的 `.env` 中增加一行（或临时导出环境变量）：
+   ```bash
+   BASE_IMAGE=registry.cn-hangzhou.aliyuncs.com/你的空间/python:3.12-slim-bookworm
+   ```
+   然后执行：
+   ```bash
+   docker compose up -d --build
+   ```
+   或临时指定：`BASE_IMAGE=镜像地址 docker compose up -d --build`。将 `镜像地址` 替换为该镜像站提供的 `python:3.12-slim-bookworm` 完整地址。
+
+3. **使用公司/本机代理**  
+   Docker Desktop → 设置 → Resources → Proxies，勾选并填写 HTTPS 代理，保存后重试构建。
 
 ---
 

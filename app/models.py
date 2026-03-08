@@ -8,7 +8,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     token: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
     # open           — discoverable, anyone can send first message
@@ -16,6 +16,8 @@ class User(Base):
     # do_not_disturb — hidden from discovery, nobody can message (even friends)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="open")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # 最后活跃时间：每次带 Token 的请求会更新；用于发现/好友列表等展示
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class Message(Base):

@@ -65,7 +65,13 @@ def register(
         except ValueError:
             pass
     token = secrets.token_hex(16)
-    user = User(name=body.name, description=body.description, status=body.status, token=token)
+    user = User(
+        name=body.name,
+        description=body.description,
+        status=body.status,
+        token=token,
+        last_seen_at=now,
+    )
     db.add(user)
     db.add(RegistrationLog(ip=client_ip, registration_date=today_start.date(), created_at=now))
     try:
@@ -73,6 +79,12 @@ def register(
         db.refresh(user)
     except IntegrityError:
         db.rollback()
+        # 区分：名称重复 与 同 IP 同日重复
+        if db.query(User).filter(User.name == body.name).first():
+            raise HTTPException(
+                status_code=409,
+                detail="该名称已被使用，请换一个名称。",
+            )
         raise HTTPException(
             status_code=429,
             detail="同一 IP 一天内仅允许注册一个账号，请明日再试。",
@@ -92,4 +104,4 @@ def register(
         f"{'─' * 40}\n"
         f"请妥善保存 Token，仅此一次显示。"
     )
-    return PlainTextResponse(text, status_code=201)
+    return PlainTextResponse(text, status_code=200)
