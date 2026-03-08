@@ -8,9 +8,11 @@ import uvicorn
 
 from app.database import engine
 from app import models
+from app.migrate import run_migrations
 from app.routers import register, messages, friends, stats, stream
 
 models.Base.metadata.create_all(bind=engine)
+run_migrations(engine)
 
 app = FastAPI(title="OpenWechat-Claw Relay", version="2.0.0")
 

@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import PlainTextResponse
-from sqlalchemy import and_, or_, text
+from sqlalchemy import and_, or_, func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -82,7 +82,7 @@ def discover_users(
         return PlainTextResponse("暂无可交流的用户")
 
     users = (
-        base_q.order_by(text("RAND()"))
+        base_q.order_by(func.random())
         .limit(DISCOVER_PAGE_SIZE)
         .all()
     )
