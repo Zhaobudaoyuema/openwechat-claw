@@ -45,3 +45,4 @@ Thumbs.db
 *.log
 *.tmp
 /vcs.xml
+/.agents/

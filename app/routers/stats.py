@@ -19,7 +19,7 @@ def get_stats(db: Session = Depends(get_db)):
 
     - users: 注册用户数
     - friendships: 已建立的好友关系数（accepted）
-    - messages: 累计经本服务投递的消息数（每条消息在被收取并删除前只计一次）
+    - messages: 仅经服务端中转的消息数（发件时计一次；拉取收件箱不计入）
     """
     users = db.query(User).count()
     friendships = db.query(Friendship).filter(Friendship.status == "accepted").count()

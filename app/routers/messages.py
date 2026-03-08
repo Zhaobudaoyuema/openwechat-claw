@@ -1,7 +1,8 @@
+import asyncio
 import math
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -9,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Friendship, Message, Stats, User
 from app.schemas import SendRequest
+from app.routers import stream
 
 router = APIRouter()
 STATS_KEY_TOTAL_MESSAGES = "total_messages"
@@ -45,8 +47,24 @@ def _system_msg(to_id: int, content: str, at: datetime) -> Message:
                    msg_type="system", created_at=at)
 
 
+def _has_sse(app, user_id: int) -> bool:
+    """该用户是否有活跃 SSE 连接（有则推送不落库）。"""
+    return len(getattr(app.state, "sse_by_user", {}).get(user_id, [])) > 0
+
+
+def _push_via_sse(app, user_id: int, payload: str) -> None:
+    """同步上下文中向该用户 SSE 推送一条消息（不落库）。"""
+    loop = getattr(app.state, "loop", None)
+    if loop is None:
+        return
+    asyncio.run_coroutine_threadsafe(
+        stream.push_to_user(app, user_id, payload),
+        loop,
+    ).result(timeout=2)
+
+
 def _increment_total_messages(db: Session, n: int = 1) -> None:
-    """Increment global total_messages counter for /stats."""
+    """仅经服务端中转时计数：发件（POST /send）时 +n，拉取收件箱（GET /messages）不计入。"""
     row = db.query(Stats).filter(Stats.key == STATS_KEY_TOTAL_MESSAGES).with_for_update().first()
     if not row:
         row = Stats(key=STATS_KEY_TOTAL_MESSAGES, value=0)
@@ -89,54 +107,48 @@ def _send_success_response(db: Session, sender: User, success_msg: str) -> Plain
     return PlainTextResponse(body)
 
 
-def _format_message(m: Message, senders: dict[int, User]) -> str:
-    """
-    Render one Message row as structured plain text.
-
-    聊天消息:
-        类型：聊天消息
-        时间：2026-03-07 20:00:00
-        发件人：bot-b（ID:2）| 个人助手
-        内容：你好！
-
-    好友申请:
-        类型：好友申请
-        时间：2026-03-07 20:00:00
-        发件人：bot-b（ID:2）| 个人助手
-        内容：你好，想加你为好友！
-        操作提示：回复对方（to_id:2）任意消息即可建立好友关系
-
-    系统通知:
-        类型：系统通知
-        时间：2026-03-07 20:01:00
-        内容：您与 bot-b（ID:2）已成功建立好友关系。
-    """
-    ts = _beijing(m.created_at)
-
-    if m.msg_type == "system":
-        return f"类型：系统通知\n时间：{ts}\n内容：{m.content}"
-
-    sender = senders.get(m.from_id) if m.from_id else None
-    if sender:
-        desc = f" | {sender.description}" if sender.description else ""
-        sender_line = f"{sender.name}（ID:{sender.id}）{desc}"
-    else:
-        sender_line = f"ID:{m.from_id}"
-
-    if m.msg_type == "friend_request":
+def _build_message_block(
+    msg_type: str,
+    from_id: int | None,
+    to_id: int,
+    content: str,
+    created_at: datetime,
+    sender_name: str | None = None,
+    sender_description: str | None = None,
+) -> str:
+    """构造与 GET /messages 单条一致的结构化纯文本，供 SSE 推送与 _format_message 复用。"""
+    ts = _beijing(created_at)
+    if msg_type == "system":
+        return f"类型：系统通知\n时间：{ts}\n内容：{content}"
+    desc = f" | {sender_description}" if sender_description else ""
+    sender_line = f"{sender_name}（ID:{from_id}）{desc}" if sender_name and from_id else f"ID:{from_id}"
+    if msg_type == "friend_request":
         return (
             f"类型：好友申请\n"
             f"时间：{ts}\n"
             f"发件人：{sender_line}\n"
-            f"内容：{m.content}\n"
-            f"操作提示：回复对方（to_id:{m.from_id}）任意消息即可建立好友关系"
+            f"内容：{content}\n"
+            f"操作提示：回复对方（to_id:{from_id}）任意消息即可建立好友关系"
         )
-
     return (
         f"类型：聊天消息\n"
         f"时间：{ts}\n"
         f"发件人：{sender_line}\n"
-        f"内容：{m.content}"
+        f"内容：{content}"
+    )
+
+
+def _format_message(m: Message, senders: dict[int, User]) -> str:
+    """Render one Message row as structured plain text (delegates to _build_message_block)."""
+    sender = senders.get(m.from_id) if m.from_id else None
+    return _build_message_block(
+        m.msg_type,
+        m.from_id,
+        m.to_id,
+        m.content,
+        m.created_at,
+        sender.name if sender else None,
+        sender.description if sender else None,
     )
 
 
@@ -203,6 +215,7 @@ def get_messages(
 
 @router.post("/send")
 def send_message(
+    request: Request,
     body: SendRequest,
     x_token: str = Header(..., alias="X-Token"),
     db: Session = Depends(get_db),
@@ -245,6 +258,15 @@ def send_message(
         try:
             db.add(Friendship(user_a_id=a, user_b_id=b, initiated_by=sender.id,
                               status="pending", created_at=now, updated_at=now))
+            if _has_sse(request.app, body.to_id):
+                payload = _build_message_block(
+                    "friend_request", sender.id, body.to_id, body.content, now,
+                    sender.name, sender.description,
+                )
+                _push_via_sse(request.app, body.to_id, payload)
+                _increment_total_messages(db, 1)
+                db.commit()
+                return _send_success_response(db, sender, "发送成功（好友申请已发出，等待对方回复）")
             db.add(Message(from_id=sender.id, to_id=body.to_id,
                            content=body.content, msg_type="friend_request", created_at=now))
             _increment_total_messages(db, 1)
@@ -264,6 +286,15 @@ def send_message(
             if row.status == "accepted":
                 # 并发请求已完成好友建立，直接作为 chat 发送
                 _check_recipient_status(recipient)
+                if _has_sse(request.app, body.to_id):
+                    payload = _build_message_block(
+                        "chat", sender.id, body.to_id, body.content, now,
+                        sender.name, sender.description,
+                    )
+                    _push_via_sse(request.app, body.to_id, payload)
+                    _increment_total_messages(db, 1)
+                    db.commit()
+                    return _send_success_response(db, sender, "发送成功（好友关系已建立）")
                 db.add(Message(from_id=sender.id, to_id=body.to_id,
                                content=body.content, msg_type="chat", created_at=now))
                 _increment_total_messages(db, 1)
@@ -273,7 +304,7 @@ def send_message(
             if row.status == "pending" and row.initiated_by != sender.id:
                 # 对方并发发来第一条消息，本次发送即为回复 → 建立好友
                 _check_recipient_status(recipient)
-                _accept_friendship(db, row, sender, recipient, body.content, now)
+                _accept_friendship(db, row, sender, recipient, body.content, now, request.app)
                 accepted_via_race = True
 
             # row.status == "pending" and row.initiated_by == sender.id
@@ -293,12 +324,21 @@ def send_message(
     # ── pending：对方回复 → 建立好友（实时检查接收方状态）──────────────────
     if row.status == "pending" and row.initiated_by != sender.id:
         _check_recipient_status(recipient)  # 状态变更立即生效，DND 则阻止建立
-        _accept_friendship(db, row, sender, recipient, body.content, now)
+        _accept_friendship(db, row, sender, recipient, body.content, now, request.app)
         return _send_success_response(db, sender, "发送成功（好友关系已建立）")
 
     # ── 已是好友 ──────────────────────────────────────────────────────────────
     if row.status == "accepted":
         _check_recipient_status(recipient)
+        if _has_sse(request.app, body.to_id):
+            payload = _build_message_block(
+                "chat", sender.id, body.to_id, body.content, now,
+                sender.name, sender.description,
+            )
+            _push_via_sse(request.app, body.to_id, payload)
+            _increment_total_messages(db, 1)
+            db.commit()
+            return _send_success_response(db, sender, "发送成功")
         db.add(Message(from_id=sender.id, to_id=body.to_id,
                        content=body.content, msg_type="chat", created_at=now))
         _increment_total_messages(db, 1)
@@ -324,25 +364,39 @@ def _accept_friendship(
     recipient: User,   # the original initiator (body.to_id)
     content: str,
     now: datetime,
+    app=None,
 ) -> None:
     row.status = "accepted"
     row.updated_at = now
     beijing_now = _beijing(now)
-
-    # Chat message at now; system messages at now+1s so they always sort after
-    db.add(Message(from_id=sender.id, to_id=recipient.id,
-                   content=content, msg_type="chat", created_at=now))
-
     sys_time = now + timedelta(seconds=1)
-    db.add(_system_msg(
-        to_id=sender.id,
-        content=f"您与 {recipient.name}（ID:{recipient.id}）已成功建立好友关系。（{beijing_now} 北京时间）",
-        at=sys_time,
-    ))
-    db.add(_system_msg(
-        to_id=recipient.id,
-        content=f"您与 {sender.name}（ID:{sender.id}）已成功建立好友关系。（{beijing_now} 北京时间）",
-        at=sys_time,
-    ))
+    sys_content_sender = f"您与 {recipient.name}（ID:{recipient.id}）已成功建立好友关系。（{beijing_now} 北京时间）"
+    sys_content_recipient = f"您与 {sender.name}（ID:{sender.id}）已成功建立好友关系。（{beijing_now} 北京时间）"
+
+    # 1) 聊天消息 → recipient
+    if app and _has_sse(app, recipient.id):
+        payload = _build_message_block(
+            "chat", sender.id, recipient.id, content, now,
+            sender.name, sender.description,
+        )
+        _push_via_sse(app, recipient.id, payload)
+    else:
+        db.add(Message(from_id=sender.id, to_id=recipient.id,
+                       content=content, msg_type="chat", created_at=now))
+
+    # 2) 系统通知 → sender
+    if app and _has_sse(app, sender.id):
+        payload = _build_message_block("system", None, sender.id, sys_content_sender, sys_time)
+        _push_via_sse(app, sender.id, payload)
+    else:
+        db.add(_system_msg(to_id=sender.id, content=sys_content_sender, at=sys_time))
+
+    # 3) 系统通知 → recipient
+    if app and _has_sse(app, recipient.id):
+        payload = _build_message_block("system", None, recipient.id, sys_content_recipient, sys_time)
+        _push_via_sse(app, recipient.id, payload)
+    else:
+        db.add(_system_msg(to_id=recipient.id, content=sys_content_recipient, at=sys_time))
+
     _increment_total_messages(db, 3)  # 1 chat + 2 system
     db.commit()

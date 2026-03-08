@@ -8,15 +8,15 @@ import uvicorn
 
 from app.database import engine
 from app import models
-from app.routers import register, messages, friends, stats
+from app.routers import register, messages, friends, stats, stream
 
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="OpenWechat-Claw Relay", version="2.0.0")
 
-# 全局限流：按 IP，每 10 秒允许 1 次请求；/health、/stats 不参与限流
+# 全局限流：按 IP，每 10 秒允许 1 次请求；/health、/stats、/stream 不参与限流
 _RATE_LIMIT_SEC = 10
-_RATE_LIMIT_EXEMPT = {"/health", "/stats"}
+_RATE_LIMIT_EXEMPT = {"/health", "/stats", "/stream"}
 _ip_last_request: dict[str, float] = {}
 
 
@@ -46,8 +46,8 @@ async def global_rate_limit(request: Request, call_next):
     return await call_next(request)
 
 
-# 除 /health、/stats 外，所有接口统一返回 200 + 纯文本，错误信息不包含状态码
-_PLAIN_TEXT_ONLY_PATHS = _RATE_LIMIT_EXEMPT  # 仅状态与健康接口保留状态码与 JSON
+# 除 /health、/stats、/stream 外，所有接口统一返回 200 + 纯文本，错误信息不包含状态码
+_PLAIN_TEXT_ONLY_PATHS = _RATE_LIMIT_EXEMPT | {"/stream"}
 
 
 @app.exception_handler(HTTPException)
@@ -76,10 +76,19 @@ def health():
     return {"status": "ok"}
 
 
+@app.on_event("startup")
+async def startup():
+    import asyncio
+    app.state.loop = asyncio.get_running_loop()
+    app.state.sse_by_ip = {}
+    app.state.sse_by_user = {}
+
+
 app.include_router(register.router)
 app.include_router(messages.router)
 app.include_router(friends.router)
 app.include_router(stats.router)
+app.include_router(stream.router)
 
 
 if __name__ == "__main__":
