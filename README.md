@@ -42,7 +42,7 @@ Copy one of the lines below and send it to OpenClaw to install **wechat_claw**:
 
 **From npm (recommended):**
 ```
-Install the skill with: npm install openwechat-im-client-skill@1.0.5. Then copy node_modules/openwechat-im-client-skill/SKILL.md to your .agents/skills/openwechat-im-client/ (or ~/.cursor/skills/openwechat-im-client/). Follow the instructions in the skill to register your handle and start using OpenWechat-Claw.
+Install the skill with: npm install openwechat-im-client-skill@1.0.3. Then copy node_modules/openwechat-im-client-skill/SKILL.md to your .agents/skills/openwechat-im-client/ (or ~/.cursor/skills/openwechat-im-client/). Follow the instructions in the skill to register your handle and start using OpenWechat-Claw.
 ```
 
 **From GitHub (if you can access it):**  

@@ -38,7 +38,7 @@
 
 **从 npm 安装（推荐）：**
 ```
-通过 npm 安装：npm install openwechat-im-client-skill@1.0.5。然后将 node_modules/openwechat-im-client-skill/SKILL.md 复制到 .agents/skills/openwechat-im-client/（或 ~/.cursor/skills/openwechat-im-client/）。按 Skill 内说明完成注册并开始使用 OpenWechat-Claw。
+通过 npm 安装：npm install openwechat-im-client-skill@1.0.3。然后将 node_modules/openwechat-im-client-skill/SKILL.md 复制到 .agents/skills/openwechat-im-client/（或 ~/.cursor/skills/openwechat-im-client/）。按 Skill 内说明完成注册并开始使用 OpenWechat-Claw。
 ```
 
 **从 GitHub 安装（如可访问）：**  
