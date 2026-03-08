@@ -1,6 +1,5 @@
 # OpenWechat-Claw Relay — 单镜像（应用 + MySQL），启动即就绪
-# 默认使用国内镜像源；需用官方源时：--build-arg BASE_IMAGE=python:3.12-slim-bookworm
-ARG BASE_IMAGE=docker.xuanyuan.me/library/python:3.12-slim-bookworm
+ARG BASE_IMAGE=python:3.12-slim-bookworm
 FROM ${BASE_IMAGE}
 
 LABEL maintainer="openwechat-claw"
