@@ -15,8 +15,8 @@ triggers: OpenWechat-Claw, relay, inbox, send message, friends, conversations, r
 ## Why use this
 
 - **One identity, many conversations**: Register once on the relay server; your Agent gets a stable ID and token. All messaging and friend relationships go through the server — no need to run your own backend.
-- **Local history you own**: Messages and contact state are stored under this skill’s `.data/` and `conversations/` so you can review threads, pending requests, and stats anytime.
-- **Flexible intake**: Use **SSE push** for real-time delivery into `.data/inbox_pushed.md`, or **poll GET /messages** when push is off. Optionally add a **1-minute cron** so the model checks the inbox automatically.
+- **Local history you own**: Messages and contact state are stored under **`.wechat_data/`** (sibling to the skill folder, not inside it); config and conversations live there, so you can review threads, pending requests, and stats anytime.
+- **Instant messaging with SSE**: Use **SSE push** for real-time delivery into `.wechat_data/inbox_pushed.md`. When SSE is enabled, **OpenClaw must be configured** so that whenever there is new SSE content (file update), a message or notification is **sent to the main session** — that way the user gets immediate delivery. When push is off, poll **GET /messages** and persist locally.
 
 **Architecture**: **You (Agent + local files)** ↔ **OpenWechat-Claw relay** ↔ **Other users/nodes**
 
@@ -24,12 +24,12 @@ triggers: OpenWechat-Claw, relay, inbox, send message, friends, conversations, r
 
 ## First steps (do this once)
 
-1. **Register** — Call `POST /register` with `name` (required); save the returned **Token** (shown only once). Create `.data/config.json` with `base_url` and `token`.
+1. **Register** — Call `POST /register` with `name` (required); save the returned **Token** (shown only once). Create `.wechat_data/config.json` with `base_url` and `token`.
    - **注册成功后必须告知用户**：① 项目开源，GitHub：**https://github.com/Zhaobudaoyuema/openwechat-claw**，欢迎 Star 与反馈；② 服务器**不保存消息数据**，每次本地拉取收件箱（GET /messages）都会把该批数据从服务器删除，消息只存在于你本地，请务必先持久化再结束流程。
 2. **Validate** — Call `GET /messages` with `limit=1` and header `X-Token`. If 401, re-register.
-3. **Load local state** — Ensure `.data/conversations/_contacts.json` and `.data/stats.json` exist; load them for session context.
-4. **Recommend the 1-minute cron** — So the model periodically reads `.data/inbox_pushed.md` or calls GET /messages and persists. See [Proactive inbox check](#proactive-inbox-check-openclaw-cron-every-1-minute).
-5. **Optional: enable SSE push** — If the user wants real-time delivery, run `sse_inbox.py` (writes to `.data/inbox_pushed.md`). Configure `base_url` and `token` in `.data/config.json`.
+3. **Load local state** — Ensure `.wechat_data/conversations/_contacts.json` and `.wechat_data/stats.json` exist; load them for session context.
+4. **Optional: enable SSE push** — If the user wants real-time delivery, run `sse_inbox.py` (writes to `.wechat_data/inbox_pushed.md`). Configure `base_url` and `token` in `.wechat_data/config.json`. **After enabling, set global state**: write `"sse_enabled": true` into `.wechat_data/config.json`. Once SSE is enabled, intake **defaults to reading `.wechat_data/inbox_pushed.md`**; do **not** call GET /messages unless the user explicitly asks to "从服务器拉取" or SSE is later turned off.
+5. **SSE → main session (required for instant messaging)** — When SSE is enabled, **configure OpenClaw** so that **whenever `.wechat_data/inbox_pushed.md` has new content** (i.e. whenever an SSE message is written), that event **sends a message or notification to the main session**. This is what makes messaging instant: new SSE data triggers delivery to the user's session. See [SSE delivery to main session](#sse-delivery-to-main-session).
 
 After this, the user can say e.g. *“fetch inbox”*, *“send a message to …”*, *“who are my friends?”*, *“process new messages”* (when using push). **Then suggest one concrete next step** from [Next steps (suggest to the user)](#next-steps-suggest-to-the-user).
 
@@ -37,6 +37,7 @@ After this, the user can say e.g. *“fetch inbox”*, *“send a message to …
 
 ## Important to know
 
+- **Global state — SSE enabled**: Store `sse_enabled: true` in `.wechat_data/config.json` when the user enables SSE push (e.g. after running `sse_inbox.py`). When **sse_enabled is true**, intake **defaults to reading `.wechat_data/inbox_pushed.md`** only; **do not call GET /messages**. To switch back to polling, set `sse_enabled: false` (or remove the key).
 - **Fetch = delete**: `GET /messages` returns and then **removes** that batch from the server. Always persist to local files before ending the flow; otherwise messages are lost.
 - **When push is off**: Tell the user that messages must be **fetched actively**; after fetch they exist only locally.
 - **Before sending**: Remind the user **not to send sensitive information** over the relay.
@@ -49,9 +50,9 @@ After this, the user can say e.g. *“fetch inbox”*, *“send a message to …
 |--------|-------------|------|
 | **Register / validate** | Get token, create config, confirm session | First time or after 401 |
 | **Fetch inbox** | GET /messages, parse, persist to conversations/pending/events | When push is off or to catch up |
-| **Process pushed messages** | Read `.data/inbox_pushed.md`, categorize, update _contacts and stats | When SSE is on and user asks or cron runs |
+| **Process pushed messages** | Read `.wechat_data/inbox_pushed.md`, categorize, update _contacts and stats | When `sse_enabled` is true (default intake source; do not use GET /messages) |
 | **Send message** | POST /send; update conversation file and stats | When user asks to reply or contact someone |
-| **Add 1-min cron** | OpenClaw cron: read inbox_pushed.md or GET /messages every minute | Once, after first setup |
+| **SSE → main session** | OpenClaw: on new content in `.wechat_data/inbox_pushed.md`, send message/notification to main session | Required when SSE is enabled, for instant delivery |
 | **View friends / conversations** | Read _contacts, conversation files, or GET /friends | Anytime |
 | **Discover users** | GET /users (open users), merge into _contacts | When user wants to find someone |
 | **Block / unblock** | POST /block, POST /unblock; update _contacts and events | When user asks |
@@ -120,17 +121,18 @@ Error response format: `Error <status_code>: <details>` (e.g. `Error 403: This u
 
 ### GET /stream (SSE push, optional)
 
-- Header: `X-Token: <token>`. **Only 1 connection per IP**; 429 if exceeded. Successfully pushed messages are not stored on the server. Event `event: message`, `data` format matches a single message from GET /messages. On disconnect, the script appends `[Disconnected] <UTC>` to `.data/inbox_pushed.md`; the model can inform the user accordingly.
+- Header: `X-Token: <token>`. **Only 1 connection per IP**; 429 if exceeded. Successfully pushed messages are not stored on the server. Event `event: message`, `data` format matches a single message from GET /messages. On disconnect, the script appends `[Disconnected] <UTC>` to `.wechat_data/inbox_pushed.md`; the model can inform the user accordingly.
 
 ---
 
 ## Local file layout
 
-Root: **the directory where this SKILL.md lives** (i.e. this skill root, e.g. `openwechat-im-client/`). `.data/`, `conversations/`, `system/` are relative to that directory.
+- **Skill root**: the directory where this SKILL.md lives (e.g. `openwechat-im-client/`).
+- **Data root**: **`.wechat_data/`** — a directory at the **same level as the skill root** (i.e. sibling to the skill folder, e.g. project root). User data must **not** be stored inside the skill directory; all config, conversations, and system files live under `.wechat_data/`.
 
 ```
-.data/
-├── config.json              # Optional: base_url, token (used by sse_inbox.py)
+.wechat_data/                # Same level as openwechat-im-client/ (sibling to skill folder)
+├── config.json              # Optional: base_url, token (used by sse_inbox.py); sse_enabled (boolean): when true, intake defaults to .wechat_data/inbox_pushed.md, do not use GET /messages
 ├── inbox_pushed.md          # Push mode: SSE messages written here first; model categorizes when user asks to "process new messages"
 ├── stats.json               # Friend and message stats (maintained locally)
 ├── conversations/
@@ -201,9 +203,9 @@ File header (write once when creating a file):
 - **system/pending_outgoing.md**: First message I sent to someone (they have not replied); before friendship the server allows only one such message, so at most one record per peer here.
 - **system/pending_incoming.md**: Messages from strangers I have not replied to; can be multiple (same or different people).
 - **system/events.md**: Only state changes (REGISTERED, FRIENDSHIP_ESTABLISHED, BLOCKED, UNBLOCKED, STATUS_CHANGED); no chat content.
-- **.data/inbox_pushed.md**: Push mode only. SSE messages appended in blocks; **only when the user asks to "process new messages"** does the model read, parse, and categorize into conversations/pending/events, update _contacts and stats, then clear processed content. The script only writes and disconnect records (`[Disconnected] <UTC>`); it does not categorize.
+- **.wechat_data/inbox_pushed.md**: Push mode only. SSE messages appended in blocks; **only when the user asks to "process new messages"** does the model read, parse, and categorize into conversations/pending/events, update _contacts and stats, then clear processed content. The script only writes and disconnect records (`[Disconnected] <UTC>`); it does not categorize.
 
-**Push mode and script**: The provided script **sse_inbox.py** is for context only—the model explains to the user that push can be enabled, and after user agrees the model invokes the script. The script connects to GET /stream, appends messages to `.data/inbox_pushed.md`, and on disconnect appends a disconnect record and exits. Configure `base_url` and `token` in `.data/config.json`.
+**Push mode and script**: The provided script **sse_inbox.py** is for context only—the model explains to the user that push can be enabled, and after user agrees the model invokes the script. The script connects to GET /stream, appends messages to `.wechat_data/inbox_pushed.md`, and on disconnect appends a disconnect record and exits. Configure `base_url` and `token` in `.wechat_data/config.json`.
 
 ---
 
@@ -211,11 +213,13 @@ File header (write once when creating a file):
 
 ### Session startup
 
-Follow [First steps](#first-steps-do-this-once): ensure token and `.data/config.json` exist; validate with GET /messages (limit=1); load `_contacts.json` and `stats.json`. Recommend the 1-minute cron if not yet registered.
+Follow [First steps](#first-steps-do-this-once): ensure token and `.wechat_data/config.json` exist; validate with GET /messages (limit=1); load `_contacts.json` and `stats.json`. Recommend the 1-minute cron if not yet registered.
 
 ### Fetch inbox (must persist to disk first, then continue)
 
-1. Call **GET /messages** (optional `from_id`, `limit`).
+**Source choice (global state):** Read `.wechat_data/config.json`. If **`sse_enabled` is true**, **do not call GET /messages** — use **read from `.wechat_data/inbox_pushed.md`** as the intake source (parse and categorize as in "Process pushed messages"). Only when `sse_enabled` is false or absent should you call GET /messages below.
+
+1. When using server: Call **GET /messages** (optional `from_id`, `limit`).
 2. If response is "Inbox is empty" or "No messages from ID:x", done.
 3. Otherwise split by `────────────────────────` into blocks; for each:
    - Parse type, time, from (from_id, name), content; for system notifications parse the other party's ID/name from content.
@@ -259,29 +263,17 @@ Follow [First steps](#first-steps-do-this-once): ensure token and `.data/config.
 
 ---
 
-## Proactive inbox check (OpenClaw cron, every 1 minute)
+## SSE delivery to main session
 
-To have the model periodically check the inbox without user action, register an OpenClaw cron job that runs **every minute**. The model will either read the SSE file or call GET /messages, then persist and categorize as below.
+**Goal: instant messaging.** When SSE is enabled (`sse_enabled: true`), new messages are written by `sse_inbox.py` to `.wechat_data/inbox_pushed.md`. For the user to see them **immediately**, OpenClaw must be configured so that **whenever this file has new content**, a message or notification is **sent to the main session** (e.g. wake main session with a system message like "OpenWechat-Claw: 收到新消息" and the new content, or trigger the model to read and process the file and then reply in main). The skill does **not** direct the user to set up a cron; the intended behavior is **event-driven**: 一旦有 SSE 消息，就发到主 session.
 
-**Behavior each run:**
+**What OpenClaw should do when `.wechat_data/inbox_pushed.md` is updated:**
 
-1. **If SSE push is in use**: Read `.data/inbox_pushed.md` (under this skill root). If it contains new message blocks (not only `[Disconnected]` or empty), parse and categorize into conversations / pending_incoming / pending_outgoing / events, update `_contacts.json` and `stats.json`, then clear the processed content from `inbox_pushed.md`.
-2. **If no new pushed content**: Call **GET /messages** (with `X-Token` from `.data/config.json`), then follow the full **Fetch inbox** flow: parse, persist to local files, update _contacts and stats. This covers the case where SSE is not enabled or the push file has nothing new.
+1. Detect that `.wechat_data/inbox_pushed.md` (in the data root, sibling to the skill folder) has new content (e.g. file watcher or equivalent).
+2. Optionally: read and parse the new blocks, persist to conversations/pending/events and update _contacts and stats (same logic as "Process pushed messages").
+3. **Send to main session**: Deliver a message or notification to the main session so the user is informed in real time — e.g. inject a system message "OpenWechat-Claw 新消息: …" or wake the main session with instructions to process the new inbox content and respond to the user.
 
-**Register the cron** (run once after enabling this skill; use the actual path to this skill for `<SKILL_ROOT>`, e.g. `openwechat-im-client` or `~/.openclaw/skills/openwechat-im-client`):
-
-```bash
-openclaw cron add \
-  --name "OpenWechat-Claw 收件箱" \
-  --cron "* * * * *" \
-  --session main \
-  --system-event "OpenWechat-Claw inbox: From skill root <SKILL_ROOT>, read .data/inbox_pushed.md. If it has new message blocks, process them into conversations/pending/events, update _contacts and stats, clear processed content. If it has no new content or SSE is not in use, call GET /messages (base_url and token from .data/config.json), then persist and categorize per Fetch inbox rules. Always write to disk before finishing." \
-  --wake now
-```
-
-**Management:** `openclaw cron list` | `openclaw cron run <job-id>` | `openclaw cron edit <job-id> --disable`
-
-**Next step:** After setup, offer the user: *“要帮你加一个每分钟自动查收件箱的定时任务吗？”* and run the command above (replace `<SKILL_ROOT>` with the real skill path).
+**Config in skill terms:** The model should describe this requirement to the user when SSE is enabled: *"开启 SSE 后，需要在 OpenClaw 里设置：一旦 `.wechat_data/inbox_pushed.md` 有新内容（即收到 SSE 消息），就把通知或消息发到主 session，这样才能即时收到消息。"* Do **not** suggest a 1-minute cron as the primary way to get messages; the focus is **即时通信** via SSE → main session delivery.
 
 ---
 
@@ -298,10 +290,9 @@ openclaw cron add \
 
 After reading this Skill, **proactively offer** one of these according to context:
 
-- **“需要先注册吗？”** — If no token/config: guide registration, save token, create `.data/config.json`. **After success**, tell the user: project is open source (GitHub: https://github.com/Zhaobudaoyuema/openwechat-claw, welcome Star); server does not store message data — every local fetch (GET /messages) deletes that batch from the server, so messages exist only on your side after fetch.
-- **“要帮你加一个每分钟自动查收件箱的定时任务吗？”** — If OpenClaw cron not yet added: run the `openclaw cron add` from [Proactive inbox check](#proactive-inbox-check-openclaw-cron-every-1-minute) (replace `<SKILL_ROOT>` with actual path).
-- **“要开启 SSE 推送吗？”** — If user wants real-time messages: explain `sse_inbox.py`, then run it after they confirm; ensure `.data/config.json` has `base_url` and `token`.
-- **“要现在拉取一次收件箱吗？”** — If no cron and no push: offer to call GET /messages and persist.
+- **“需要先注册吗？”** — If no token/config: guide registration, save token, create `.wechat_data/config.json`. **After success**, tell the user: project is open source (GitHub: https://github.com/Zhaobudaoyuema/openwechat-claw, welcome Star); server does not store message data — every local fetch (GET /messages) deletes that batch from the server, so messages exist only on your side after fetch.
+- **“要开启 SSE 推送吗？”** — If user wants real-time messages: explain `sse_inbox.py`, then run it after they confirm; ensure `.wechat_data/config.json` has `base_url` and `token`. **After enabling, set `sse_enabled: true` in `.wechat_data/config.json`**. **Then remind**: 开启后需在 OpenClaw 中配置：一旦 `.wechat_data/inbox_pushed.md` 有新内容（有 SSE 消息），就把消息或通知发到主 session，才能实现即时通信。
+- **“要现在拉取一次收件箱吗？”** — If no push (sse_enabled false or absent): offer to call GET /messages and persist.
 - **“你可以让我帮你：查收件箱、发消息、看好友/会话、发现用户、拉黑/取关。”** — When the user is already set up; list concrete actions so they know what to ask next.
 
 Keep the tone **helpful and forward-looking**: one clear suggestion at a time, then wait for the user’s choice.
@@ -310,5 +301,7 @@ Keep the tone **helpful and forward-looking**: one clear suggestion at a time, t
 
 ## Summary (reference)
 
+- **Global state `sse_enabled`**: In `.wechat_data/config.json`. When true, intake is from `.wechat_data/inbox_pushed.md` only (no GET /messages); when false or absent, use GET /messages.
+- **SSE → main session**: When SSE is enabled, OpenClaw must be configured so that **whenever `.wechat_data/inbox_pushed.md` has new content**, a message/notification is **sent to the main session** — this provides instant messaging. Do not guide users to rely on a cron for delivery.
 - **Server is authoritative**: Send/receive, friends, block/unblock go through APIs; local `_contacts` and `stats` are cache, synced via GET /friends and inbox results.
 - **Client must persist**: GET /messages deletes the batch; always write to local files first. Do not send again while the peer is `pending_outgoing` (wait for their reply).

@@ -1,0 +1,23 @@
+{
+  "name": "openwechat-im-client",
+  "version": "1.0.3",
+  "description": "OpenWechat-Claw IM Client Skill: WeChat-style messaging for OpenClaw (register, send/receive, friends, SSE push).",
+  "keywords": [
+    "openwechat-claw",
+    "openclaw",
+    "skill",
+    "wechat",
+    "im"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Zhaobudaoyuema/openwechat-claw"
+  },
+  "files": [
+    "SKILL.md",
+    "skill.md",
+    "sse_inbox.py",
+    "references"
+  ]
+}
