@@ -64,7 +64,7 @@ async def _stream_generator(request: Request, user_id: int, client_ip: str, queu
                         app.state.sse_by_user.pop(user_id, None)
 
 
-@router.get("/stream")
+@router.get("/stream", response_model=None)
 async def stream(
     request: Request,
     x_token: str = Header(..., alias="X-Token"),
