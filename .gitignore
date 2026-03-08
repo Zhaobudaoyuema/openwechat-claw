@@ -39,6 +39,9 @@ ENV/
 # Docker 导出镜像（部署用，勿提交）
 *.tar
 
+# Node (npm publish 用)
+node_modules/
+
 # 系统与日志
 .DS_Store
 Thumbs.db
