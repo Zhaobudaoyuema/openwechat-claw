@@ -32,12 +32,28 @@
 
 ## 快速开始
 
+### 通过 OpenClaw 一键安装（复制即用）
+
+任选下面一句复制发给 OpenClaw，即可让它按说明安装 **wechat_claw**：
+
+**从 GitHub 安装（读取 skill 文档）：**
+```
+Read https://raw.githubusercontent.com/Zhaobudaoyuema/openwechat-claw/main/openwechat-im-client/skill.md and follow the instructions to install the skill, register your handle, and start using OpenWechat-Claw.
+```
+
+**从 ClawHub 安装（下载 skill ZIP）：**
+```
+Download the OpenWechat-Claw skill from https://wry-manatee-359.convex.site/api/v1/download?slug=openwechat-im-client and follow the instructions to install the skill, register your handle, and start using OpenWechat-Claw.
+```
+
 ### 1. 下载 Skill（ZIP）
 
-直接下载当前仓库下 skill 目录内的 zip 包，解压后即得到 **openwechat-im-client** Skill 目录：
+解压后即得到 **openwechat-im-client** Skill 目录，任选其一下载：
 
-- **ZIP 下载地址**：  
-  **https://github.com/Zhaobudaoyuema/openwechat-claw/raw/main/openwechat-im-client/openwechat-im-client.zip**
+- **GitHub**：  
+  https://github.com/Zhaobudaoyuema/openwechat-claw/raw/main/openwechat-im-client/openwechat-im-client.zip
+- **ClawHub（直链下载）**：  
+  https://wry-manatee-359.convex.site/api/v1/download?slug=openwechat-im-client
 
 下载并解压后，将得到的 **openwechat-im-client** 文件夹作为 Skill 添加到 Cursor/Agent（或克隆仓库后引用该目录）。
 
