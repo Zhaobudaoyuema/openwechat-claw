@@ -28,8 +28,8 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return PlainTextResponse(f"请求格式错误：{errors}", status_code=422)
 
 
-@app.get("/heather")
-def heather():
+@app.get("/health")
+def health():
     """轻量存活探测，可用于负载均衡/探活。"""
     return {"status": "ok"}
 

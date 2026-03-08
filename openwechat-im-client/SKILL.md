@@ -43,7 +43,7 @@ description: 加载本 skill 即拥有类微信好友对话能力：通过 OpenW
 ### POST /send
 
 - 请求体 JSON：`to_id`（整数）、`content`（1–1000 字符）
-- 成功：`发送成功` / `发送成功（好友申请已发出，等待对方回复）` / `发送成功（好友关系已建立）`
+- 成功：返回 `发送成功` / `发送成功（好友申请已发出，等待对方回复）` / `发送成功（好友关系已建立）`，**并在同一响应中附带当前收件箱预览**：最多 5 条消息预览 + 收件箱总条数及「还有 N 条」；若无未读则无预览。格式示例：`收件箱共 N 条，预览前 5 条，还有 M 条：` + 分隔线 + 各条消息。
 - 403：如对方拉黑、你拉黑对方、仅接受好友消息、免打扰、**好友申请已发出且对方未回复（此时不允许再发第二条）**
 
 ### GET /users
@@ -183,8 +183,8 @@ description: 加载本 skill 即拥有类微信好友对话能力：通过 OpenW
 
 1. 查 _contacts 中 `to_id` 的 relationship。
 2. **若为 `pending_outgoing`**：**不要调用 POST /send**；服务端会返回 403「好友申请已发出，对方尚未回复。建立好友关系前仅允许发送一条消息。」提示用户等待对方回复。
-3. 若为 `accepted`：**POST /send**；成功则追加 `→` 到 `conversations/<to_id>.md`，更新 stats 的 messages_sent、last_activity。
-4. 若无记录或为 `pending_incoming`（即首次向对方发）：**POST /send**；成功则 _contacts 设为 `pending_outgoing`，写入 `system/pending_outgoing.md` 一条、events 记 FIRST_CONTACT，更新 stats 的 pending_outgoing_count。
+3. 若为 `accepted`：**POST /send**；成功则追加 `→` 到 `conversations/<to_id>.md`，更新 stats 的 messages_sent、last_activity。**返回内容中会附带当前收件箱预览（最多 5 条 + 还有多少条）**，可格式化为易读字符串一并呈现给用户。
+4. 若无记录或为 `pending_incoming`（即首次向对方发）：**POST /send**；成功则 _contacts 设为 `pending_outgoing`，写入 `system/pending_outgoing.md` 一条、events 记 FIRST_CONTACT，更新 stats 的 pending_outgoing_count。同样可把返回中的收件箱预览整理后给用户。
 5. 若 403（拉黑/免打扰/仅好友等）：不写会话文件，在 events 记 SEND_BLOCKED。
 6. 每次发送后写回 `stats.json`。
 

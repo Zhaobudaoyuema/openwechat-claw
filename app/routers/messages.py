@@ -52,16 +52,19 @@ def _increment_total_messages(db: Session, n: int = 1) -> None:
     row.value += n
 
 
-def _inbox_preview(db: Session, me: User) -> str:
+PREVIEW_LIMIT = 5
+
+
+def _inbox_preview(db: Session, me: User, preview_limit: int = PREVIEW_LIMIT) -> str:
     """
-    查询当前用户收件箱条数并预览前 3 条（只读，不删除）。
+    查询当前用户收件箱条数并预览前 preview_limit 条（只读，不删除）。
     若无消息返回空字符串。
     """
     base_q = db.query(Message).filter(Message.to_id == me.id)
     total = base_q.count()
     if total == 0:
         return ""
-    msgs = base_q.order_by(Message.created_at.asc()).limit(3).all()
+    msgs = base_q.order_by(Message.created_at.asc()).limit(preview_limit).all()
     sender_ids = {m.from_id for m in msgs if m.from_id is not None}
     senders: dict[int, User] = {}
     if sender_ids:
@@ -69,12 +72,18 @@ def _inbox_preview(db: Session, me: User) -> str:
             senders[u.id] = u
     parts = [f"[{i + 1}]\n{_format_message(m, senders)}" for i, m in enumerate(msgs)]
     body = "\n" + _SEP + "\n".join(parts)
-    remaining = total - 3 if total > 3 else 0
-    summary = f"\n\n收件箱共 {total} 条，预览前 3 条"
+    remaining = total - len(msgs)
+    summary = f"\n\n收件箱共 {total} 条，预览前 {len(msgs)} 条"
     if remaining > 0:
         summary += f"，还有 {remaining} 条"
     summary += "：\n" + "═" * 40 + body + "\n" + "═" * 40
     return summary
+
+
+def _send_success_response(db: Session, sender: User, success_msg: str) -> PlainTextResponse:
+    """发送成功后返回 success_msg，并附带当前收件箱预览（最多 5 条 + 剩余条数）。"""
+    body = success_msg + _inbox_preview(db, sender, PREVIEW_LIMIT)
+    return PlainTextResponse(body)
 
 
 def _format_message(m: Message, senders: dict[int, User]) -> str:
@@ -256,7 +265,7 @@ def send_message(
                                content=body.content, msg_type="chat", created_at=now))
                 _increment_total_messages(db, 1)
                 db.commit()
-                return PlainTextResponse("发送成功（好友关系已建立）")
+                return _send_success_response(db, sender, "发送成功（好友关系已建立）")
 
             if row.status == "pending" and row.initiated_by != sender.id:
                 # 对方并发发来第一条消息，本次发送即为回复 → 建立好友
@@ -268,8 +277,8 @@ def send_message(
             # 同一发起方的并发请求已写入，本次视为重复，静默成功
 
         if accepted_via_race:
-            return PlainTextResponse("发送成功（好友关系已建立）")
-        return PlainTextResponse("发送成功（好友申请已发出，等待对方回复）")
+            return _send_success_response(db, sender, "发送成功（好友关系已建立）")
+        return _send_success_response(db, sender, "发送成功（好友申请已发出，等待对方回复）")
 
     # ── pending：发起方再次发送（仅允许一条）────────────────────────────────
     if row.status == "pending" and row.initiated_by == sender.id:
@@ -282,7 +291,7 @@ def send_message(
     if row.status == "pending" and row.initiated_by != sender.id:
         _check_recipient_status(recipient)  # 状态变更立即生效，DND 则阻止建立
         _accept_friendship(db, row, sender, recipient, body.content, now)
-        return PlainTextResponse("发送成功（好友关系已建立）")
+        return _send_success_response(db, sender, "发送成功（好友关系已建立）")
 
     # ── 已是好友 ──────────────────────────────────────────────────────────────
     if row.status == "accepted":
@@ -291,8 +300,10 @@ def send_message(
                        content=body.content, msg_type="chat", created_at=now))
         _increment_total_messages(db, 1)
         db.commit()
+        return _send_success_response(db, sender, "发送成功")
 
-    return PlainTextResponse("发送成功")
+    # 理论上仅剩 accepted；防御性处理未知状态
+    raise HTTPException(status_code=500, detail="好友关系状态异常，请稍后重试")
 
 
 def _check_recipient_status(recipient: User) -> None:

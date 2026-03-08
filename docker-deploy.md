@@ -159,7 +159,7 @@ docker stats openwechat-claw
   - `docker ps` 看容器是否在运行；
   - `docker logs openwechat-claw` 看是否有报错（尤其 MySQL 启动或应用连接）；
   - `docker port openwechat-claw` 确认端口映射；
-  - 在服务器上 `curl http://127.0.0.1:8000/heather` 或 `curl http://127.0.0.1:8000/stats` 测试本机访问。
+  - 在服务器上 `curl http://127.0.0.1:8000/health` 或 `curl http://127.0.0.1:8000/stats` 测试本机访问。
 - **数据库连不上**：
   - 确认已挂卷 `-v xxx:/var/lib/mysql`，且容器内 `DB_HOST=127.0.0.1`（由入口脚本设置）；
   - 若使用外部 MySQL，则需在构建时或运行时不使用内置 MySQL 流程（见下方「使用外部 MySQL」）。
@@ -206,10 +206,10 @@ rm /root/openwechat-claw.tar
 
 - **服务端口**：默认 `8000`；若映射为 `-p 80:8000`，则通过 80 访问。
 - **探活接口**（无需鉴权）：
-  - **`GET /heather`**：轻量存活探测，返回 `{"status":"ok"}`，适合负载均衡或定时探活。
+  - **`GET /health`**：轻量存活探测，返回 `{"status":"ok"}`，适合负载均衡或定时探活。
   - **`GET /stats`**：统计信息（注册用户数、好友关系数、消息数），会访问数据库，适合健康检查或监控。
 - 示例：
-  - `http://服务器IP:8000/heather`
+  - `http://服务器IP:8000/health`
   - `http://服务器IP:8000/stats`
 
 ---

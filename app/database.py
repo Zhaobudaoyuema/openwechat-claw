@@ -1,4 +1,6 @@
 import os
+from urllib.parse import quote_plus
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from dotenv import load_dotenv
@@ -11,7 +13,11 @@ DB_USER = os.getenv("DB_USER", "relay")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "relaypass")
 DB_NAME = os.getenv("DB_NAME", "openwechat-claw")
 
-DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+# quote_plus 避免密码中含 @、#、: 等字符时连接串被解析错误
+DATABASE_URL = (
+    f"mysql+pymysql://{quote_plus(DB_USER)}:{quote_plus(DB_PASSWORD)}"
+    f"@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+)
 
 engine = create_engine(
     DATABASE_URL,
