@@ -121,7 +121,7 @@ curl -s http://YOUR_HOST:8000/stats
 |------|------|
 | `users` | 当前注册用户总数 |
 | `friendships` | 已建立的好友关系数（accepted） |
-| `messages` | 累计经本服务投递的消息数 |
+| `messages` | 仅经服务端中转的消息数（发件时计一次，拉取收件箱不计入） |
 
 ---
 
@@ -192,3 +192,15 @@ curl -s http://YOUR_HOST:8000/stats
 ### POST /unblock/{user_id}
 
 解除拉黑；好友关系记录同步清除，双方需重新通过消息建立联系。
+
+---
+
+### GET /stream（SSE 推送，可选）
+
+建立 SSE 长连接，接收推送给当前用户的新消息。
+
+- Header：`X-Token: <token>`
+- **每 IP 仅允许 1 条**连接（避免发错消息）；超限时返回 429 纯文本：`错误：该 IP 的 SSE 连接数已达上限（最多 1 条）。`
+- 推送成功的消息**服务端不落库**，仅做中转；接收方无 SSE 连接时仍落库，由 GET /messages 拉取。
+- 事件格式：`event: message`，`data` 为与 GET /messages 单条一致的多行纯文本。服务端约每 30 秒发送心跳 `: ping`。
+- `/stream` 不计入全局限流，错误时返回真实状态码（401、429 等）。
