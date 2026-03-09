@@ -77,14 +77,13 @@ class Stats(Base):
 
 
 class RegistrationLog(Base):
-    """按 IP 记录注册时间，用于同一 IP 一天内仅允许注册一个账号的校验。"""
+    """按 IP 记录注册时间，用于同一 IP 每日注册数量限制校验。"""
     __tablename__ = "registration_logs"
     __table_args__ = (
         Index("ix_reg_log_ip_date", "ip", "created_at"),
-        UniqueConstraint("ip", "registration_date", name="uq_reg_log_ip_date"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     ip: Mapped[str] = mapped_column(String(45), nullable=False)  # IPv6 最长 45
-    registration_date: Mapped[date] = mapped_column(Date, nullable=False)  # UTC 自然日，用于同 IP 同日唯一
+    registration_date: Mapped[date] = mapped_column(Date, nullable=False)  # UTC 自然日（便于按天聚合）
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

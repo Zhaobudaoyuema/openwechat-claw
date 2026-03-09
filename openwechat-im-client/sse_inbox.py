@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """
 Push inbox script: connects to GET /stream and appends received messages to .data/inbox_pushed.md.
-On disconnect, appends a disconnect record at the end of the file for the model to detect and inform the user.
+When accumulated messages reach batch_size, writes a batch to .data/sse_batch_ready.md for OpenClaw:
+the model decides which session to send to (sessions_send) and sends once per batch.
+On disconnect, appends a disconnect record and flushes any remaining buffered messages to sse_batch_ready.md.
 Usage: run from the Skill root directory, or have the model invoke it after the user agrees to enable push.
-Requires: requests (or urllib); .data/config.json must contain base_url and token.
+Pass --target-session SESSION_KEY so the script knows (and persists) where to notify; the batch file will include it.
+Requires: requests (or urllib); .data/config.json must contain base_url and token; optional batch_size (default 5).
 """
+import argparse
 import json
 import os
 import sys
@@ -15,7 +19,9 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, ".data")
 CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 INBOX_PUSHED_PATH = os.path.join(DATA_DIR, "inbox_pushed.md")
+BATCH_READY_PATH = os.path.join(DATA_DIR, "sse_batch_ready.md")
 SEP = "─" * 40
+DEFAULT_BATCH_SIZE = 5
 
 
 def load_config():
@@ -39,6 +45,26 @@ def append_message(payload: str):
         f.write("\n")
 
 
+def write_batch_ready(messages: list[str], target_session: str | None = None):
+    """Write accumulated messages to sse_batch_ready.md; include target_session if set (from --target-session)."""
+    if not messages:
+        return
+    ensure_data_dir()
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with open(BATCH_READY_PATH, "w", encoding="utf-8") as f:
+        f.write("# SSE 待发批次 (" + str(len(messages)) + " 条)\n")
+        f.write("> " + ts + "\n")
+        if target_session:
+            f.write("> Target session: " + target_session + "\n")
+        f.write("\n---\n\n")
+        for i, payload in enumerate(messages):
+            if i:
+                f.write("\n" + SEP + "\n\n")
+            f.write(payload.strip())
+            f.write("\n")
+        f.write("\n")
+
+
 def append_disconnect():
     ensure_data_dir()
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -47,6 +73,16 @@ def append_disconnect():
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Connect to GET /stream; append messages to inbox_pushed.md; write batches to sse_batch_ready.md."
+    )
+    parser.add_argument(
+        "--target-session",
+        metavar="SESSION_KEY",
+        help="OpenClaw session key to notify for each batch (e.g. main). Saved to .data/config.json as sse_target_session and written into each batch file.",
+    )
+    args = parser.parse_args()
+
     cfg = load_config()
     if not cfg or not cfg.get("token") or not cfg.get("base_url"):
         print(
@@ -55,8 +91,19 @@ def main():
         )
         sys.exit(1)
 
+    # Persist target session from CLI so batch file and later processing know where to send
+    target_session: str | None = args.target_session or cfg.get("sse_target_session")
+    if args.target_session:
+        ensure_data_dir()
+        cfg["sse_target_session"] = args.target_session
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+
     base_url = cfg["base_url"].rstrip("/")
     token = cfg["token"]
+    batch_size = int(cfg.get("batch_size", DEFAULT_BATCH_SIZE))
+    if batch_size < 1:
+        batch_size = 1
     stream_url = base_url + "/stream"
 
     try:
@@ -81,6 +128,8 @@ def main():
         print(f"Connection failed: {e}")
         sys.exit(1)
 
+    # Buffer for batch: when length >= batch_size, write sse_batch_ready.md (with target_session if set)
+    message_buffer: list[str] = []
     try:
         buf = []
         for line in r.iter_lines(decode_unicode=True):
@@ -93,11 +142,20 @@ def main():
                 buf = []
                 if full.strip() and not full.strip().startswith(": ping"):
                     append_message(full)
+                    message_buffer.append(full)
+                    if len(message_buffer) >= batch_size:
+                        write_batch_ready(message_buffer, target_session)
+                        message_buffer = []
     except Exception as e:
         print(f"Error reading stream: {e}", file=sys.stderr)
     finally:
+        if message_buffer:
+            write_batch_ready(message_buffer, target_session)
         append_disconnect()
-        print("SSE disconnected; disconnect record written to .data/inbox_pushed.md; the model can inform the user accordingly.")
+        print(
+            "SSE disconnected; disconnect record written to .data/inbox_pushed.md. "
+            "Any buffered batch written to .data/sse_batch_ready.md for OpenClaw session delivery."
+        )
 
 
 if __name__ == "__main__":

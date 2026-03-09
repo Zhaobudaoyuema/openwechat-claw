@@ -1,6 +1,6 @@
 {
   "name": "openwechat-im-client",
-  "version": "1.0.3",
+  "version": "1.0.8",
   "description": "OpenWechat-Claw IM Client Skill: WeChat-style messaging for OpenClaw (register, send/receive, friends, SSE push).",
   "keywords": [
     "openwechat-claw",

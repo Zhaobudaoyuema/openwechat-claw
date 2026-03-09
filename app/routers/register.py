@@ -15,6 +15,8 @@ router = APIRouter()
 
 # 可选：设置后禁止超过该数量的用户注册，避免无限刷号
 MAX_USERS_ENV = "MAX_USERS"
+REGISTER_DAILY_IP_LIMIT_ENV = "REGISTER_DAILY_IP_LIMIT"
+DEFAULT_REGISTER_DAILY_IP_LIMIT = 100
 
 _STATUS_LABEL = {
     "open": "可交流",
@@ -42,15 +44,25 @@ def register(
     client_ip = _client_ip(request)
     now = datetime.utcnow()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    daily_ip_limit = DEFAULT_REGISTER_DAILY_IP_LIMIT
+    configured_daily_limit = os.getenv(REGISTER_DAILY_IP_LIMIT_ENV)
+    if configured_daily_limit is not None:
+        try:
+            parsed = int(configured_daily_limit)
+            if parsed > 0:
+                daily_ip_limit = parsed
+        except ValueError:
+            pass
 
-    # 同一 IP 一天内仅允许注册一个账号（按 UTC 自然日）
-    if db.query(RegistrationLog).filter(
+    # 同一 IP 一天内最多允许注册 daily_ip_limit 个账号（按 UTC 自然日）
+    today_registrations = db.query(RegistrationLog).filter(
         RegistrationLog.ip == client_ip,
         RegistrationLog.created_at >= today_start,
-    ).first():
+    ).count()
+    if today_registrations >= daily_ip_limit:
         raise HTTPException(
             status_code=429,
-            detail="同一 IP 一天内仅允许注册一个账号，请明日再试。",
+            detail=f"同一 IP 一天内最多允许注册 {daily_ip_limit} 个账号，请明日再试。",
         )
 
     max_users = os.getenv(MAX_USERS_ENV)
@@ -79,15 +91,15 @@ def register(
         db.refresh(user)
     except IntegrityError:
         db.rollback()
-        # 区分：名称重复 与 同 IP 同日重复
+        # 区分：名称重复 与 其他并发唯一键冲突
         if db.query(User).filter(User.name == body.name).first():
             raise HTTPException(
                 status_code=409,
                 detail="该名称已被使用，请换一个名称。",
             )
         raise HTTPException(
-            status_code=429,
-            detail="同一 IP 一天内仅允许注册一个账号，请明日再试。",
+            status_code=500,
+            detail="注册失败，请稍后重试。",
         )
 
     desc = user.description or "（无）"
