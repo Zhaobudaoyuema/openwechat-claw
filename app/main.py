@@ -3,10 +3,10 @@ import time
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import PlainTextResponse
 import uvicorn
 
 from app.database import engine
+from app.utils import plain_text
 from app import models
 from app.migrate import run_migrations
 from app.routers import register, messages, friends, stats, stream
@@ -40,10 +40,7 @@ async def global_rate_limit(request: Request, call_next):
     now = time.monotonic()
     last = _ip_last_request.get(ip, 0)
     if now - last < _RATE_LIMIT_SEC:
-        return PlainTextResponse(
-            "错误：请求过于频繁，请稍后再试。",
-            status_code=200,
-        )
+        return plain_text("错误：请求过于频繁，请稍后再试。", status_code=200)
     _ip_last_request[ip] = now
     return await call_next(request)
 
@@ -53,23 +50,23 @@ _PLAIN_TEXT_ONLY_PATHS = _RATE_LIMIT_EXEMPT | {"/stream"}
 
 
 @app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException) -> PlainTextResponse:
+async def http_exception_handler(request: Request, exc: HTTPException):
     path = request.scope.get("path", "").split("?")[0]
     if path in _PLAIN_TEXT_ONLY_PATHS:
-        return PlainTextResponse(f"错误 {exc.status_code}：{exc.detail}", status_code=exc.status_code)
-    return PlainTextResponse(f"错误：{exc.detail}", status_code=200)
+        return plain_text(f"错误 {exc.status_code}：{exc.detail}", status_code=exc.status_code)
+    return plain_text(f"错误：{exc.detail}", status_code=200)
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError) -> PlainTextResponse:
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = "; ".join(
         f"{' -> '.join(str(l) for l in e['loc'])}: {e['msg']}"
         for e in exc.errors()
     )
     path = request.scope.get("path", "").split("?")[0]
     if path in _PLAIN_TEXT_ONLY_PATHS:
-        return PlainTextResponse(f"请求格式错误：{errors}", status_code=422)
-    return PlainTextResponse(f"请求格式错误：{errors}", status_code=200)
+        return plain_text(f"请求格式错误：{errors}", status_code=422)
+    return plain_text(f"请求格式错误：{errors}", status_code=200)
 
 
 @app.get("/health")

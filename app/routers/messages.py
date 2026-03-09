@@ -4,6 +4,8 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
+
+from app.utils import plain_text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -101,10 +103,10 @@ def _inbox_preview(db: Session, me: User, preview_limit: int = PREVIEW_LIMIT) ->
     return summary
 
 
-def _send_success_response(db: Session, sender: User, success_msg: str) -> PlainTextResponse:
+def _send_success_response(db: Session, sender: User, success_msg: str):
     """发送成功后返回 success_msg，并附带当前收件箱预览（最多 5 条 + 剩余条数）。"""
     body = success_msg + _inbox_preview(db, sender, PREVIEW_LIMIT)
-    return PlainTextResponse(body)
+    return plain_text(body)
 
 
 def _build_message_block(
@@ -179,7 +181,7 @@ def get_messages(
 
     if total_in_inbox == 0:
         scope = f"来自 ID:{from_id} 的消息" if from_id else "收件箱"
-        return PlainTextResponse(f"{scope}为空")
+        return plain_text(f"{scope}为空")
 
     msgs = base_q.order_by(Message.created_at.asc()).limit(limit).all()
     fetched = len(msgs)
@@ -210,7 +212,7 @@ def get_messages(
     db.query(Message).filter(Message.id.in_(msg_ids)).delete(synchronize_session=False)
     db.commit()
 
-    return PlainTextResponse(text)
+    return plain_text(text)
 
 
 @router.post("/send")

@@ -2,6 +2,8 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import PlainTextResponse
+
+from app.utils import plain_text
 from sqlalchemy import and_, or_, func
 from sqlalchemy.orm import Session
 
@@ -79,7 +81,7 @@ def discover_users(
     total = base_q.count()
 
     if total == 0:
-        return PlainTextResponse("暂无可交流的用户")
+        return plain_text("暂无可交流的用户")
 
     users = (
         base_q.order_by(func.random())
@@ -90,7 +92,7 @@ def discover_users(
     summary = f"本次随机展示 {len(users)} 人（可交流用户共 {total} 人）"
     parts = [f"[{i + 1}] {_user_line(u)}" for i, u in enumerate(users)]
     body = f"\n{_SEP}\n".join(parts)
-    return PlainTextResponse(f"{summary}\n{'═' * 40}\n{body}\n{'═' * 40}")
+    return plain_text(f"{summary}\n{'═' * 40}\n{body}\n{'═' * 40}")
 
 
 @router.get("/users/{user_id}")
@@ -104,7 +106,7 @@ def get_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
-    return PlainTextResponse(_user_line(user))
+    return plain_text(_user_line(user))
 
 
 # ── Friends list ─────────────────────────────────────────────────────────────
@@ -125,7 +127,7 @@ def list_friends(
     ).all()
 
     if not rows:
-        return PlainTextResponse("暂无好友")
+        return plain_text("暂无好友")
 
     # Collect unique friend IDs and their row in one pass
     seen: set[int] = set()
@@ -154,7 +156,7 @@ def list_friends(
             )
 
     body = f"\n{_SEP}\n".join(parts)
-    return PlainTextResponse(f"共 {len(parts)} 位好友\n{'═' * 40}\n{body}\n{'═' * 40}")
+    return plain_text(f"共 {len(parts)} 位好友\n{'═' * 40}\n{body}\n{'═' * 40}")
 
 
 # ── Status ───────────────────────────────────────────────────────────────────
@@ -170,7 +172,7 @@ def update_status(
     me.status = body.status
     db.commit()
     label = _STATUS_LABEL.get(body.status, body.status)
-    return PlainTextResponse(f"状态已更新为：{label}（{body.status}）")
+    return plain_text(f"状态已更新为：{label}（{body.status}）")
 
 
 # ── Block / Unblock ──────────────────────────────────────────────────────────
@@ -212,7 +214,7 @@ def block_user(
     ).delete(synchronize_session=False)
 
     db.commit()
-    return PlainTextResponse(f"已拉黑 {target.name}（ID:{target.id}），其在你收件箱中的消息已清除")
+    return plain_text(f"已拉黑 {target.name}（ID:{target.id}），其在你收件箱中的消息已清除")
 
 
 @router.post("/unblock/{user_id}")
@@ -240,4 +242,4 @@ def unblock_user(
     db.commit()
 
     name = target.name if target else f"ID:{user_id}"
-    return PlainTextResponse(f"已解除对 {name}（ID:{user_id}）的拉黑，双方好友关系已清除，可重新发消息建立联系")
+    return plain_text(f"已解除对 {name}（ID:{user_id}）的拉黑，双方好友关系已清除，可重新发消息建立联系")

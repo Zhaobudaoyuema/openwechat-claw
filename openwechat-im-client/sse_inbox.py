@@ -152,20 +152,30 @@ def main():
     disconnect_reason = "stream_end"
     try:
         buf = []
+        current_event = "message"  # 默认兼容无 event 的旧格式
         for line in r.iter_lines(decode_unicode=True):
             if line is None:
                 continue
-            if line.startswith("data:"):
+            if line.startswith("event:"):
+                current_event = line[6:].strip()
+            elif line.startswith("data:"):
                 buf.append(line[5:].lstrip())
             elif line == "" and buf:
                 full = "\n".join(buf)
                 buf = []
                 if full.strip() and not full.strip().startswith(": ping"):
-                    append_message(full)
-                    message_buffer.append(full)
-                    if len(message_buffer) >= batch_size:
-                        write_batch_ready(message_buffer, target_session)
-                        message_buffer = []
+                    if current_event == "log":
+                        # 服务端日志事件：写入 sse_channel.log，不入收件箱
+                        ensure_data_dir()
+                        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                        with open(SSE_CHANNEL_LOG_PATH, "a", encoding="utf-8") as f:
+                            f.write(f"[{ts}] [server] {full.strip()}\n")
+                    else:
+                        append_message(full)
+                        message_buffer.append(full)
+                        if len(message_buffer) >= batch_size:
+                            write_batch_ready(message_buffer, target_session)
+                            message_buffer = []
     except Exception as e:
         disconnect_reason = str(e)
         print(f"Error reading stream: {e}", file=sys.stderr)

@@ -1,8 +1,11 @@
 """
 SSE 推送：GET /stream，每 IP 仅允许 1 条连接。
 推送成功则服务端不落库（见 messages 路由）。
+支持重试：断开后客户端可立即重连；每次请求返回日志事件。
 """
 import asyncio
+import logging
+import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -11,10 +14,13 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User
+from app.utils import plain_text
 
 router = APIRouter(tags=["stream"])
+logger = logging.getLogger(__name__)
 
 _HEARTBEAT_SEC = 30
+_SSE_CHARSET = "utf-8"
 
 
 def _client_ip(request: Request) -> str:
@@ -39,21 +45,40 @@ def _get_user_by_token(x_token: str, db: Session) -> User:
     return user
 
 
-async def _stream_generator(request: Request, user_id: int, client_ip: str, queue: asyncio.Queue):
-    """Yield SSE events: message events from queue, or heartbeat every 30s."""
+def _sse_event(event_type: str, data: str) -> bytes:
+    """构造 SSE 事件并编码为 UTF-8 字节，避免乱码。"""
+    lines = data.split("\n")
+    chunk = "".join("data: " + line + "\n" for line in lines) + "\n"
+    return f"event: {event_type}\n{chunk}".encode(_SSE_CHARSET)
+
+
+async def _stream_generator(
+    request: Request,
+    user_id: int,
+    client_ip: str,
+    queue: asyncio.Queue,
+    request_id: str,
+):
+    """Yield SSE events: 先发 log 事件，再发 message 或 heartbeat。所有输出均为 UTF-8 字节。"""
     app = request.app
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     try:
+        # 首次连接立即返回 log 事件，便于客户端/模型知晓连接状态
+        log_data = f"stream_connected request_id={request_id} user_id={user_id} ip={client_ip} ts={ts}"
+        yield _sse_event("log", log_data)
+        logger.info("[stream] %s", log_data)
+
         while True:
             try:
                 payload = await asyncio.wait_for(queue.get(), timeout=_HEARTBEAT_SEC)
                 # SSE 多行 data：每行前加 "data: "
                 lines = payload.split("\n")
                 chunk = "".join("data: " + line + "\n" for line in lines) + "\n"
-                yield f"event: message\n{chunk}"
+                yield f"event: message\n{chunk}".encode(_SSE_CHARSET)
             except asyncio.TimeoutError:
-                yield ": ping\n\n"
+                yield ": ping\n\n".encode(_SSE_CHARSET)
     finally:
-        # 断开时从注册表移除，便于该 IP 再次连接
+        # 断开时从注册表移除，便于该 IP 再次连接（支持重试）
         if hasattr(app.state, "sse_by_ip") and client_ip in app.state.sse_by_ip:
             _, q = app.state.sse_by_ip.pop(client_ip, (None, None))
             if q is not None and hasattr(app.state, "sse_by_user"):
@@ -62,23 +87,32 @@ async def _stream_generator(request: Request, user_id: int, client_ip: str, queu
                     lst.remove(q)
                     if not lst:
                         app.state.sse_by_user.pop(user_id, None)
+        disconnect_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        log_data = f"stream_disconnected request_id={request_id} user_id={user_id} ip={client_ip} ts={disconnect_ts}"
+        logger.info("[stream] %s", log_data)
 
 
 @router.get("/stream", response_model=None)
 async def stream(
     request: Request,
     x_token: str = Header(..., alias="X-Token"),
+    x_request_id: str | None = Header(None, alias="X-Request-ID"),
     db: Session = Depends(get_db),
 ) -> StreamingResponse | PlainTextResponse:
     """
     建立 SSE 长连接，接收推送给当前用户的新消息。
     每 IP 仅允许 1 条连接；推送成功时服务端不落库。
+    支持重试：断开后可立即重连；每次连接首条事件为 log，便于客户端/模型操作重试。
     """
+    request_id = x_request_id or str(uuid.uuid4())[:8]
+    client_ip = _client_ip(request)
+    app = request.app
+
+    logger.info("[stream] request_start request_id=%s ip=%s", request_id, client_ip)
+
     user = _get_user_by_token(x_token, db)
     user.last_seen_at = datetime.now(timezone.utc)
     db.commit()
-    client_ip = _client_ip(request)
-    app = request.app
 
     if not hasattr(app.state, "sse_by_ip"):
         app.state.sse_by_ip = {}
@@ -86,9 +120,12 @@ async def stream(
         app.state.sse_by_user = {}
 
     if client_ip in app.state.sse_by_ip:
-        return PlainTextResponse(
-            "错误：该 IP 的 SSE 连接数已达上限（最多 1 条）。",
+        logger.warning("[stream] connection_limit request_id=%s ip=%s", request_id, client_ip)
+        # Retry-After 便于客户端/模型实现重试退避
+        return plain_text(
+            "错误：该 IP 的 SSE 连接数已达上限（最多 1 条）。断开后请重试。",
             status_code=429,
+            headers={"Retry-After": "2"},
         )
 
     queue: asyncio.Queue = asyncio.Queue()
@@ -96,11 +133,12 @@ async def stream(
     app.state.sse_by_user.setdefault(user.id, []).append(queue)
 
     return StreamingResponse(
-        _stream_generator(request, user.id, client_ip, queue),
-        media_type="text/event-stream",
+        _stream_generator(request, user.id, client_ip, queue, request_id),
+        media_type="text/event-stream; charset=utf-8",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
+            "X-Request-ID": request_id,
         },
     )

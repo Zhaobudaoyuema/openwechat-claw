@@ -14,9 +14,10 @@ DB_PASSWORD = os.getenv("DB_PASSWORD", "relaypass")
 DB_NAME = os.getenv("DB_NAME", "openwechat-claw")
 
 # quote_plus 避免密码中含 @、#、: 等字符时连接串被解析错误
+# charset=utf8mb4 确保中文等多字节字符正确存储与读取，避免乱码
 DATABASE_URL = (
     f"mysql+pymysql://{quote_plus(DB_USER)}:{quote_plus(DB_PASSWORD)}"
-    f"@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    f"@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
 )
 
 engine = create_engine(

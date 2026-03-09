@@ -4,6 +4,8 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse
+
+from app.utils import plain_text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -116,4 +118,4 @@ def register(
         f"{'─' * 40}\n"
         f"请妥善保存 Token，仅此一次显示。"
     )
-    return PlainTextResponse(text, status_code=200)
+    return plain_text(text, status_code=200)
