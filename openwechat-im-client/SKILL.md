@@ -1,17 +1,23 @@
 ---
 name: openwechat-im-client
-description: Guide OpenClaw to use openwechat-claw with server-authoritative chat flow, fixed local .data persistence, mandatory SSE-first transport after registration, and a minimal user UI. Trigger this skill whenever the user asks to register or set token (e.g. "帮我注册xxx"), view messages/new inbox (e.g. "查看消息"), send messages to a user (e.g. "发送消息给xxx"), manage friend state including friends list and block/unblock (e.g. "拉黑xxx"), route notifications to main/group session via sessions_send, maintain local chat/friend/profile files under .data, or build/adjust a basic UI for chat status and target session visibility.
+description: Guide OpenClaw to use openwechat-claw with server-authoritative chat flow, fixed local .data persistence, mandatory SSE-first transport after registration, and a minimal user UI. Trigger this skill whenever the user asks to register or set token (e.g. "帮我注册xxx"), view messages/new inbox (e.g. "查看消息"), send messages to a user (e.g. "发送消息给xxx"), manage friend state including friends list and block/unblock (e.g. "拉黑xxx"), maintain local chat/friend/profile files under .data, or build/adjust a basic UI for chat status.
 ---
 
 # OpenWechat-Claw IM Client (Guide First)
 
 > First load reminder: This skill corresponds to [openwechat-claw](https://github.com/Zhaobudaoyuema/openwechat-claw).
 
+## Language Rule (Must Follow)
+
+**OpenClaw must respond to the user in the user's original language.** If the user writes in Chinese, reply in Chinese. If the user writes in English, reply in English. Match the language of the user's input for all prompts, explanations, and UI handoff messages.
+
+---
+
 This skill is intentionally designed as **"minimum runnable demo + guided iteration"**:
 
 - Give OpenClaw a clear baseline to connect relay API and manage chat locally.
 - Give only a **basic SSE script demo**; OpenClaw should extend it based on user needs.
-- Provide a **basic user UI demo** (`demo_ui.py`) as the first visible version, then iterate with user requests.
+- Provide a **basic user UI demo** (`demo_ui.html`, pure frontend) as the first visible version, then iterate with user requests.
 - Keep `.data` path stable and deterministic: **always under this skill directory**.
 
 ---
@@ -47,10 +53,11 @@ When user has no valid token, OpenClaw should guide this minimal flow:
    - `token`
    - `my_id`
    - `my_name`
-   - `sse_target_session` (default `main`)
    - `batch_size` (default `5`)
-5. Immediately enable SSE with `python sse_inbox.py --target-session <SESSION_KEY>` (default `main`).
+5. Immediately enable SSE with `python sse_inbox.py`.
 6. Verify channel health from `.data/sse_channel.log` first. Use `GET /messages?limit=1` only if SSE cannot be established.
+7. Start demo_ui with `npm run ui` (serves on port 8765), and **proactively notify the user** that `demo_ui.html` exists to view chat status and messages.
+8. Tell the user: demo_ui can be customized (layout, refresh rate, view split), or they can design their own UI. Ask in the user's language, e.g. "Start demo_ui now, or customize/design your own?"
 
 Example minimal `.data/config.json`:
 
@@ -60,7 +67,6 @@ Example minimal `.data/config.json`:
   "token": "replace_with_token",
   "my_id": 1,
   "my_name": "alice",
-  "sse_target_session": "main",
   "batch_size": 5
 }
 ```
@@ -90,7 +96,7 @@ If script and `SKILL.md` are in different directories, still compute from the sc
 
 ### .data persistence policy
 
-**All files under `.data/` are persistent.** Unless the user explicitly requests deletion, do not delete or clear them. The model should read from these files to infer state (e.g. connection status from `sse_channel.log`, messages from `inbox_pushed.md`). Only clear or rotate files when the user asks or when processing logic explicitly requires it (e.g. after `sessions_send` for `sse_batch_ready.md`).
+**All files under `.data/` are persistent.** Unless the user explicitly requests deletion, do not delete or clear them. The model should read from these files to infer state (e.g. connection status from `sse_channel.log`, messages from `inbox_pushed.md`). Only clear or rotate files when the user asks or when processing logic explicitly requires it.
 
 ---
 
@@ -100,11 +106,10 @@ If script and `SKILL.md` are in different directories, still compute from the sc
 openwechat-im-client/
 ├─ SKILL.md
 ├─ sse_inbox.py                  # basic SSE demo script
-├─ demo_ui.py                    # basic user UI demo (provided starter)
+├─ demo_ui.html                  # basic user UI demo (pure frontend)
 └─ .data/
-   ├─ config.json                # base_url, token, batch_size, sse_target_session
+   ├─ config.json                # base_url, token, batch_size
    ├─ inbox_pushed.md            # raw pushed messages
-   ├─ sse_batch_ready.md         # one batch + target session marker
    ├─ sse_channel.log            # SSE channel lifecycle logs (connect/reconnect/disconnect/fallback)
    ├─ profile.json               # local basic profile cache (my_id/my_name/status)
    ├─ contacts.json              # friend relationship cache maintained by OpenClaw
@@ -210,11 +215,8 @@ The example must do:
 
 1. Read `.data/config.json` under this skill directory.
 2. Connect `GET /stream` with `X-Token`.
-3. Append raw pushed messages to `.data/inbox_pushed.md`.
-4. Buffer messages and write one batch to `.data/sse_batch_ready.md`.
-5. Batch file includes target session line:
-   - `> Target session: <SESSION_KEY>`
-6. **sse_inbox must record connection lifecycle logs to `.data/sse_channel.log`** so the model knows connection status (connected/disconnected/reconnecting/fallback). Every state transition must be appended to this file; the model reads it to infer channel health and decide whether to use SSE or fallback to `GET /messages`.
+3. **Append raw pushed messages to `.data/inbox_pushed.md`.** This is mandatory; received SSE messages must be persisted locally.
+4. **sse_inbox must record connection lifecycle logs to `.data/sse_channel.log`** so the model knows connection status (connected/disconnected/reconnecting/fallback). Every state transition must be appended to this file; the model reads it to infer channel health and decide whether to use SSE or fallback to `GET /messages`.
 
 ### Channel priority and fallback rules (must follow)
 
@@ -227,66 +229,27 @@ The example must do:
 Recommended log entries (UTC text lines):
 
 ```text
-[2026-03-09T10:00:00Z] SSE_CONNECT_START target=main
-[2026-03-09T10:00:01Z] SSE_CONNECTED target=main
+[2026-03-09T10:00:00Z] SSE_CONNECT_START
+[2026-03-09T10:00:01Z] SSE_CONNECTED
 [2026-03-09T10:05:12Z] SSE_DISCONNECTED reason=timeout
 [2026-03-09T10:05:12Z] SSE_RECONNECT_SCHEDULED attempt=1 delay_sec=2
 [2026-03-09T10:05:14Z] SSE_RECONNECT_ATTEMPT attempt=1
 [2026-03-09T10:05:20Z] FALLBACK_MESSAGES_POLL reason=sse_unavailable
-[2026-03-09T10:05:33Z] SSE_RESTORED target=main
+[2026-03-09T10:05:33Z] SSE_RESTORED
 ```
-
-### OpenClaw session key constraints (from docs)
-
-- Main direct chat key is always literal: `main`.
-- Group/chat keys are not guessed; use the full key returned by `sessions_list`.
-- `sessions_send` accepts:
-  - `sessionKey` (e.g. `main` or full group key), or
-  - `sessionId` returned by `sessions_list`.
-- Default recommendation in this skill:
-  - if user does not specify: use `main`
-  - if user specifies a group/channel target: call `sessions_list` and pick exact `key`
 
 ### Invocation rule
 
 OpenClaw should treat this as a post-registration default action, not an optional step:
 
-1. confirm target session (`main` by default),
-2. start SSE script immediately,
-3. monitor `.data/sse_channel.log`.
+1. Start SSE script immediately.
+2. Monitor `.data/sse_channel.log`.
 
 Run:
 
 ```bash
-python sse_inbox.py --target-session main
+python sse_inbox.py
 ```
-
-or another session key chosen by user.
-
-### OpenClaw follow-up rule
-
-When `.data/sse_batch_ready.md` exists, OpenClaw should:
-
-1. Read target session from the batch file first.
-2. Fallback to `.data/config.json` -> `sse_target_session` -> `main`.
-3. Call `sessions_send` once per batch.
-4. Clear or rotate the processed batch file.
-
-### Tool call example (for clarity)
-
-When sending a processed batch to main session:
-
-```json
-{
-  "tool": "sessions_send",
-  "params": {
-    "sessionKey": "main",
-    "message": "SSE batch summary ..."
-  }
-}
-```
-
-When user chose a group session, use exact key from `sessions_list` row `key`.
 
 ---
 
@@ -309,8 +272,6 @@ Example minimal snapshot:
 ```json
 {
   "updated_at_utc": "2026-03-09T10:00:00Z",
-  "sse_target_session": "main",
-  "pending_batch_count": 1,
   "messages_received_recent": 12,
   "friends_count": 3,
   "latest_peers": ["#2 bob", "#8 carol"]
@@ -320,7 +281,7 @@ Example minimal snapshot:
 OpenClaw should refresh this file after:
 
 - `GET /messages` processing
-- SSE batch flush/write
+- SSE message append
 - `GET /friends` sync
 - registration/profile updates
 
@@ -346,32 +307,27 @@ Use this path only when needed for:
 
 ### Goal
 
-The user-visible UI only needs to demonstrate two things:
+The user-visible UI only needs to demonstrate:
 
 1. Current chat status (recent messages / simple stats).
-2. Which session SSE batches will be pushed to.
 
 ### OpenClaw must proactively offer the UI
 
-**OpenClaw should actively tell the user about the UI** (e.g. after registration + SSE is running, or when the user first interacts with this skill). Do not wait for the user to ask. Example prompt:
-
-- "已提供基础 UI 脚本 `demo_ui.py`，可查看当前会话、消息和推送目标。是否现在启动？或需要自定义布局/刷新频率/视图拆分？"
-- Or in English: "A basic UI script `demo_ui.py` is available to view chat status, messages, and push target. Would you like to start it now, or customize layout / refresh rate / view split?"
+**OpenClaw should actively tell the user about the UI** (e.g. after registration + SSE is running, or when the user first interacts with this skill). Do not wait for the user to ask. **Use the user's language** for the prompt. Example in English: "A basic UI script `demo_ui.html` is available to view chat status and messages. Would you like to start it now, or customize layout / refresh rate / view split?"
 
 Then act on the user's choice: start the UI if they say yes, or discuss customization options (card/table/bubble layout, auto-refresh, split by friend/session/time) if they want to customize first.
 
 ### Basic UI implementation requirement
 
-Provide and maintain a runnable minimal script: `demo_ui.py`.
+Provide and maintain a runnable minimal UI: `demo_ui.html`. Run with `npm run ui` (serves on port 8765).
 
-It should read only from `.data/` and show:
+It reads `.data/` files by default and displays content **formatted by file type**:
+- `.json` → pretty-printed JSON
+- `.md`, `.log` → plain text
 
-- **Current target session** from `.data/config.json` (`sse_target_session`).
-- **Current chat status** from `.data/conversations.md` and/or `.data/stats.json`.
-- **Latest pushed messages** from `.data/inbox_pushed.md`.
-- **Pending batch preview** from `.data/sse_batch_ready.md`.
+Default file list: `config.json`, `profile.json`, `contacts.json`, `stats.json`, `context_snapshot.json`, `inbox_pushed.md`, `conversations.md`, `sse_channel.log`.
 
-Keep this version intentionally simple (single page, basic refresh).
+Keep this version intentionally simple (single page, basic refresh). Run with `npm run ui` (serves on port 8765).
 
 ### UI customization handoff (OpenClaw asks user)
 
@@ -389,13 +345,13 @@ Then OpenClaw updates UI incrementally based on user preference.
 
 1. Confirm token/base URL in `.data/config.json`.
 2. If no token, run onboarding registration flow first.
-3. Right after registration, confirm target session (`main` or specified group/session) and start SSE by default.
-4. View/check new messages from SSE local files first (`.data/inbox_pushed.md`, `.data/sse_batch_ready.md`).
+3. Right after registration, start SSE by default.
+4. View/check new messages from SSE local files first (`.data/inbox_pushed.md`).
 5. If SSE disconnects, reconnect automatically; use `/messages` only as temporary outage fallback.
 6. Keep channel lifecycle logs in `.data/sse_channel.log` so model decisions are based on observable channel state.
 7. Once SSE is restored, immediately return to SSE-first message handling.
-8. **Proactively tell the user about the UI** and ask: "是否启动 demo_ui，或需要自定义？" (Start the UI now, or customize?) — do not wait for the user to ask.
-9. Act on user choice: start `demo_ui.py` if they want to run it, or discuss customization options if they want to customize first.
+8. **Proactively tell the user about the UI** in the user's language (e.g. "Start demo_ui now, or customize?") — do not wait for the user to ask.
+9. Act on user choice: run `npm run ui` to serve `demo_ui.html` if they want to view it, or discuss customization options if they want to customize first.
 
 ---
 

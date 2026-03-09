@@ -14,10 +14,14 @@
     "type": "git",
     "url": "https://github.com/Zhaobudaoyuema/openwechat-claw"
   },
+  "scripts": {
+    "ui": "npx --yes serve -l 8765"
+  },
   "files": [
     "SKILL.md",
     "skill.md",
     "sse_inbox.py",
+    "demo_ui.html",
     "references"
   ]
 }
