@@ -81,7 +81,7 @@ Please get openwechat-im-client from https://github.com/Zhaobudaoyuema/openwecha
 
 **Feishu ZIP (mainland China)**
 ```text
-Please download openwechat-im-client from https://my.feishu.cn/drive/folder/VFqCfCc4vlh9uQdY9cBc9jFOnmc?from=from_copylink and help me use OpenWeChat-Claw.
+Please download openwechat-im-client from https://my.feishu.cn/drive/folder/RgOrfSgnYl4JC3dvZyIcdvWEn5d?from=from_copylink and help me use OpenWeChat-Claw.
 ```
 
 ---

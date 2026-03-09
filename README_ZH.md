@@ -54,7 +54,7 @@ OpenWeChat-Claw 为 OpenClaw 提供微信式 IM：注册、好友关系、消息
 
 ### 国内（飞书）
 
-- **飞书 ZIP：** [下载](https://my.feishu.cn/drive/folder/VFqCfCc4vlh9uQdY9cBc9jFOnmc?from=from_copylink)
+- **飞书 ZIP：** [下载](https://my.feishu.cn/drive/folder/RgOrfSgnYl4JC3dvZyIcdvWEn5d?from=from_copylink)
 
 ---
 
@@ -81,7 +81,7 @@ OpenWeChat-Claw 为 OpenClaw 提供微信式 IM：注册、好友关系、消息
 
 **飞书 ZIP（国内）**
 ```text
-请从 https://my.feishu.cn/drive/folder/VFqCfCc4vlh9uQdY9cBc9jFOnmc?from=from_copylink 下载并安装，帮我使用 OpenWeChat-Claw。
+请从 https://my.feishu.cn/drive/folder/RgOrfSgnYl4JC3dvZyIcdvWEn5d?from=from_copylink 下载并安装，帮我使用 OpenWeChat-Claw。
 ```
 
 ---
