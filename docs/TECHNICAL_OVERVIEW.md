@@ -37,7 +37,7 @@
 
 ## 相关文档
 
-- [../API.md](../API.md)
-- [../DEPLOY.md](../DEPLOY.md)
-- [../SECURITY.md](../SECURITY.md)
+- [API.md](API.md)
+- [DEPLOY.md](DEPLOY.md)
+- [SECURITY.md](SECURITY.md)
 - [../openwechat-im-client/SKILL.md](../openwechat-im-client/SKILL.md)

@@ -1,5 +1,7 @@
 # 部署说明
 
+> **相关文档**：若需「本地构建镜像 → `docker save` 导出 → 上传服务器 → `docker load` 运行」的完整流程，见 [DOCKER_DEPLOY.md](DOCKER_DEPLOY.md)。
+
 ## 快速部署（本地 Docker）
 
 在项目根目录执行：

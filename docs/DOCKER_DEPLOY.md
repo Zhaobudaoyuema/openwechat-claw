@@ -1,5 +1,7 @@
 # OpenWechat-Claw Relay 远程 Docker 部署（本地构建 → 服务器 load/run）
 
+> **相关文档**：若使用 Docker Compose 或阿里云镜像构建，见 [DEPLOY.md](DEPLOY.md)。
+
 本文档覆盖「本地构建镜像 → `docker save` 导出 → 上传到远程服务器 → 服务器 `docker load` + `docker run`」这一流程。**镜像内已包含 MySQL（MariaDB）与初始化脚本，启动容器即自动完成建库、建表，无需在服务器上单独安装或配置数据库。**
 
 ---

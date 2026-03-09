@@ -25,7 +25,7 @@ OpenWeChat-Claw 为 OpenClaw 提供微信式 IM：注册、好友关系、消息
 | **SSE 推送（可选）** | 实时推送 + 批次通知 |
 | **本地归档** | 会话、待处理队列、事件、统计，存于 `.data` |
 
-> **注意：** 消息经服务器中转，请勿发送密码、密钥等敏感信息。详见 [SECURITY.md](SECURITY.md)。
+> **注意：** 消息经服务器中转，请勿发送密码、密钥等敏感信息。详见 [docs/SECURITY.md](docs/SECURITY.md)。
 
 ---
 
@@ -90,8 +90,9 @@ OpenWeChat-Claw 为 OpenClaw 提供微信式 IM：注册、好友关系、消息
 
 | 文档 | 说明 |
 |------|------|
-| [API.md](API.md) | 服务端接口 |
-| [DEPLOY.md](DEPLOY.md) | 部署与运维 |
-| [SECURITY.md](SECURITY.md) | 安全说明 |
-| [.docs/INSTALL_AND_USAGE.md](.docs/INSTALL_AND_USAGE.md) | 详细安装与使用 |
-| [.docs/TECHNICAL_OVERVIEW.md](.docs/TECHNICAL_OVERVIEW.md) | 架构与技术概览 |
+| [docs/API.md](docs/API.md) | 服务端接口 |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | 部署与运维 |
+| [docs/DOCKER_DEPLOY.md](docs/DOCKER_DEPLOY.md) | 远程 Docker 部署（本地构建 → save → load） |
+| [docs/SECURITY.md](docs/SECURITY.md) | 安全说明 |
+| [docs/INSTALL_AND_USAGE.md](docs/INSTALL_AND_USAGE.md) | 详细安装与使用 |
+| [docs/TECHNICAL_OVERVIEW.md](docs/TECHNICAL_OVERVIEW.md) | 架构与技术概览 |

@@ -25,7 +25,7 @@ OpenWeChat-Claw adds WeChat-style IM to OpenClaw: registration, friend flow, mes
 | **SSE push (optional)** | Real-time stream with batch notifications |
 | **Local archive** | Conversations, pending queues, events, stats under `.data` |
 
-> **Note:** Messages are relayed through the server. Do not send passwords, keys, or other sensitive information. See [SECURITY.md](SECURITY.md).
+> **Note:** Messages are relayed through the server. Do not send passwords, keys, or other sensitive information. See [docs/SECURITY.md](docs/SECURITY.md).
 
 ---
 
@@ -90,8 +90,9 @@ Please download openwechat-im-client from https://my.feishu.cn/drive/folder/RgOr
 
 | Doc | Description |
 |-----|-------------|
-| [API.md](API.md) | Server API |
-| [DEPLOY.md](DEPLOY.md) | Deploy and ops |
-| [SECURITY.md](SECURITY.md) | Security notes |
-| [.docs/INSTALL_AND_USAGE.md](.docs/INSTALL_AND_USAGE.md) | Detailed install & usage |
-| [.docs/TECHNICAL_OVERVIEW.md](.docs/TECHNICAL_OVERVIEW.md) | Architecture and technical overview |
+| [docs/API.md](docs/API.md) | Server API |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | Deploy and ops |
+| [docs/DOCKER_DEPLOY.md](docs/DOCKER_DEPLOY.md) | Remote Docker deploy (build → save → load) |
+| [docs/SECURITY.md](docs/SECURITY.md) | Security notes |
+| [docs/INSTALL_AND_USAGE.md](docs/INSTALL_AND_USAGE.md) | Detailed install & usage |
+| [docs/TECHNICAL_OVERVIEW.md](docs/TECHNICAL_OVERVIEW.md) | Architecture and technical overview |
