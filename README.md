@@ -54,7 +54,7 @@ Full detail: [openwechat-im-client/SKILL.md](openwechat-im-client/SKILL.md)
 
 ### Mainland China (Feishu)
 
-- **Feishu ZIP:** [download](https://my.feishu.cn/drive/folder/VFqCfCc4vlh9uQdY9cBc9jFOnmc?from=from_copylink)
+- **Feishu ZIP:** [download](https://my.feishu.cn/drive/folder/RgOrfSgnYl4JC3dvZyIcdvWEn5d?from=from_copylink)
 
 ---
 

@@ -4,6 +4,7 @@ Push inbox script: connects to GET /stream and appends received messages to .dat
 When accumulated messages reach batch_size, writes a batch to .data/sse_batch_ready.md for OpenClaw:
 the model decides which session to send to (sessions_send) and sends once per batch.
 On disconnect, appends a disconnect record and flushes any remaining buffered messages to sse_batch_ready.md.
+Records connection lifecycle (connect/disconnect/fail) to .data/sse_channel.log so the model knows connection status.
 Usage: run from the Skill root directory, or have the model invoke it after the user agrees to enable push.
 Pass --target-session SESSION_KEY so the script knows (and persists) where to notify; the batch file will include it.
 Requires: requests (or urllib); .data/config.json must contain base_url and token; optional batch_size (default 5).
@@ -20,6 +21,7 @@ DATA_DIR = os.path.join(SCRIPT_DIR, ".data")
 CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 INBOX_PUSHED_PATH = os.path.join(DATA_DIR, "inbox_pushed.md")
 BATCH_READY_PATH = os.path.join(DATA_DIR, "sse_batch_ready.md")
+SSE_CHANNEL_LOG_PATH = os.path.join(DATA_DIR, "sse_channel.log")
 SEP = "─" * 40
 DEFAULT_BATCH_SIZE = 5
 
@@ -72,6 +74,18 @@ def append_disconnect():
         f.write("\n" + SEP + "\n[Disconnected] " + ts + "\n")
 
 
+def log_channel(event: str, **kwargs):
+    """Append a channel lifecycle event to sse_channel.log so the model knows connection status."""
+    ensure_data_dir()
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    parts = [f"[{ts}]", event]
+    for k, v in kwargs.items():
+        parts.append(f"{k}={v}")
+    line = " ".join(parts) + "\n"
+    with open(SSE_CHANNEL_LOG_PATH, "a", encoding="utf-8") as f:
+        f.write(line)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Connect to GET /stream; append messages to inbox_pushed.md; write batches to sse_batch_ready.md."
@@ -113,10 +127,14 @@ def main():
         sys.exit(1)
 
     headers = {"X-Token": token, "Accept": "text/event-stream"}
+    log_channel("SSE_CONNECT_START", target=target_session or "main")
     try:
         r = requests.get(stream_url, headers=headers, stream=True, timeout=60)
         r.raise_for_status()
+        log_channel("SSE_CONNECTED", target=target_session or "main")
     except requests.exceptions.HTTPError as e:
+        reason = f"http_{e.response.status_code}"
+        log_channel("SSE_CONNECT_FAILED", reason=reason)
         if e.response.status_code == 429:
             print("Error: SSE connection limit reached for this IP (max 1).")
         elif e.response.status_code == 401:
@@ -125,11 +143,13 @@ def main():
             print(f"Connection failed: {e}")
         sys.exit(1)
     except Exception as e:
+        log_channel("SSE_CONNECT_FAILED", reason=str(e))
         print(f"Connection failed: {e}")
         sys.exit(1)
 
     # Buffer for batch: when length >= batch_size, write sse_batch_ready.md (with target_session if set)
     message_buffer: list[str] = []
+    disconnect_reason = "stream_end"
     try:
         buf = []
         for line in r.iter_lines(decode_unicode=True):
@@ -147,10 +167,12 @@ def main():
                         write_batch_ready(message_buffer, target_session)
                         message_buffer = []
     except Exception as e:
+        disconnect_reason = str(e)
         print(f"Error reading stream: {e}", file=sys.stderr)
     finally:
         if message_buffer:
             write_batch_ready(message_buffer, target_session)
+        log_channel("SSE_DISCONNECTED", reason=disconnect_reason)
         append_disconnect()
         print(
             "SSE disconnected; disconnect record written to .data/inbox_pushed.md. "

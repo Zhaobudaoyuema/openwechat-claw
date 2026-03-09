@@ -88,6 +88,10 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 If script and `SKILL.md` are in different directories, still compute from the script location and normalize to this skill root explicitly.
 
+### .data persistence policy
+
+**All files under `.data/` are persistent.** Unless the user explicitly requests deletion, do not delete or clear them. The model should read from these files to infer state (e.g. connection status from `sse_channel.log`, messages from `inbox_pushed.md`). Only clear or rotate files when the user asks or when processing logic explicitly requires it (e.g. after `sessions_send` for `sse_batch_ready.md`).
+
 ---
 
 ## Minimal Local Layout
@@ -210,7 +214,7 @@ The example must do:
 4. Buffer messages and write one batch to `.data/sse_batch_ready.md`.
 5. Batch file includes target session line:
    - `> Target session: <SESSION_KEY>`
-6. Keep channel lifecycle logs in `.data/sse_channel.log` so the model can infer current channel health and fallback behavior.
+6. **sse_inbox must record connection lifecycle logs to `.data/sse_channel.log`** so the model knows connection status (connected/disconnected/reconnecting/fallback). Every state transition must be appended to this file; the model reads it to infer channel health and decide whether to use SSE or fallback to `GET /messages`.
 
 ### Channel priority and fallback rules (must follow)
 
@@ -347,6 +351,15 @@ The user-visible UI only needs to demonstrate two things:
 1. Current chat status (recent messages / simple stats).
 2. Which session SSE batches will be pushed to.
 
+### OpenClaw must proactively offer the UI
+
+**OpenClaw should actively tell the user about the UI** (e.g. after registration + SSE is running, or when the user first interacts with this skill). Do not wait for the user to ask. Example prompt:
+
+- "已提供基础 UI 脚本 `demo_ui.py`，可查看当前会话、消息和推送目标。是否现在启动？或需要自定义布局/刷新频率/视图拆分？"
+- Or in English: "A basic UI script `demo_ui.py` is available to view chat status, messages, and push target. Would you like to start it now, or customize layout / refresh rate / view split?"
+
+Then act on the user's choice: start the UI if they say yes, or discuss customization options (card/table/bubble layout, auto-refresh, split by friend/session/time) if they want to customize first.
+
 ### Basic UI implementation requirement
 
 Provide and maintain a runnable minimal script: `demo_ui.py`.
@@ -362,7 +375,7 @@ Keep this version intentionally simple (single page, basic refresh).
 
 ### UI customization handoff (OpenClaw asks user)
 
-After the base UI works, OpenClaw should ask:
+When the user wants to customize, OpenClaw should ask:
 
 - "Do you want card layout, table layout, or chat bubble layout?"
 - "Need auto-refresh every N seconds?"
@@ -381,8 +394,8 @@ Then OpenClaw updates UI incrementally based on user preference.
 5. If SSE disconnects, reconnect automatically; use `/messages` only as temporary outage fallback.
 6. Keep channel lifecycle logs in `.data/sse_channel.log` so model decisions are based on observable channel state.
 7. Once SSE is restored, immediately return to SSE-first message handling.
-8. Start/offer basic `demo_ui.py` to visualize `.data`.
-9. Ask user how they want to customize SSE/UI next.
+8. **Proactively tell the user about the UI** and ask: "是否启动 demo_ui，或需要自定义？" (Start the UI now, or customize?) — do not wait for the user to ask.
+9. Act on user choice: start `demo_ui.py` if they want to run it, or discuss customization options if they want to customize first.
 
 ---
 
