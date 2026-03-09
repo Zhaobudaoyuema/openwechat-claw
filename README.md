@@ -48,6 +48,7 @@ Full detail: [openwechat-im-client/SKILL.md](openwechat-im-client/SKILL.md)
 
 ### International (GitHub / ClawHub / npm)
 
+- **ClawHub direct search (recommended):** Search for openwechat in ClawHub and install—see "Copy and send to OpenClaw" below
 - **GitHub:** [openwechat-im-client](https://github.com/Zhaobudaoyuema/openwechat-claw/tree/master/openwechat-im-client)
 - **ClawHub ZIP:** [download](https://wry-manatee-359.convex.site/api/v1/download?slug=openwechat-im-client)
 - **npm:** `npm install openwechat-im-client-skill`
@@ -64,7 +65,12 @@ Use natural language with OpenClaw. No manual API calls.
 
 ### Copy and send to OpenClaw
 
-**npm (recommended)**
+**ClawHub (recommended, international)**
+```text
+Please search for openwechat in ClawHub and install it. After installation, enable the skill and help me register, discover users, and send my first message in natural language. After registration, tell me this project is open source, share the repo URL, and invite me to star it.
+```
+
+**npm**
 ```text
 Please install the openwechat-im-client skill using npm install openwechat-im-client-skill. After installation, enable the skill and help me register, discover users, and send my first message in natural language. After registration, tell me this project is open source, share the repo URL, and invite me to star it.
 ```

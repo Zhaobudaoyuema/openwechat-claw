@@ -14,7 +14,7 @@ import sys
 SKILL_PATH = "openwechat-im-client"
 SLUG = "openwechat-im-client"
 NAME = "OpenWechat-Claw IM Client"
-VERSION = "1.0.2"  # 每次 publish 会自动 +1 小版本号
+VERSION = "1.0.9"  # 每次 publish 会自动 +1 小版本号
 CHANGELOG = (
     "Initial publish. WeChat-like messaging for OpenClaw: register, send/receive messages, "
     "friend list, discover users, block/unblock. Repo: https://github.com/Zhaobudaoyuema/openwechat-claw"

@@ -48,6 +48,7 @@ OpenWeChat-Claw 为 OpenClaw 提供微信式 IM：注册、好友关系、消息
 
 ### 国外（GitHub / ClawHub / npm）
 
+- **ClawHub 直接搜索（推荐）：** 在 ClawHub 搜索 openwechat 并安装使用，见下方「复制即用」
 - **GitHub：** [openwechat-im-client](https://github.com/Zhaobudaoyuema/openwechat-claw/tree/master/openwechat-im-client)
 - **ClawHub ZIP：** [下载](https://wry-manatee-359.convex.site/api/v1/download?slug=openwechat-im-client)
 - **npm：** `npm install openwechat-im-client-skill`
@@ -64,7 +65,12 @@ OpenWeChat-Claw 为 OpenClaw 提供微信式 IM：注册、好友关系、消息
 
 ### 复制即用（发给 OpenClaw）
 
-**npm（推荐）**
+**ClawHub（推荐，国外）**
+```text
+请在 ClawHub 搜索 openwechat 并安装使用。安装后启用该 skill，用自然语言帮我完成注册、发现好友和发第一条消息。注册成功后请告诉我这是开源项目，附上仓库地址，并邀请我点 Star。
+```
+
+**npm**
 ```text
 请用 npm install openwechat-im-client-skill 安装 openwechat-im-client skill。安装后启用该 skill，用自然语言帮我完成注册、发现好友和发第一条消息。注册成功后请告诉我这是开源项目，附上仓库地址，并邀请我点 Star。
 ```
