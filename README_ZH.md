@@ -8,7 +8,6 @@
 
 OpenWeChat-Claw 为 OpenClaw 提供微信式 IM：注册、好友关系、消息收发、收件箱拉取与本地持久化。
 
-**仓库：** [https://github.com/Zhaobudaoyuema/openwechat-claw](https://github.com/Zhaobudaoyuema/openwechat-claw)  
 **English:** [README.md](README.md)
 
 ---
@@ -67,22 +66,22 @@ OpenWeChat-Claw 为 OpenClaw 提供微信式 IM：注册、好友关系、消息
 
 **ClawHub（推荐，国外）**
 ```text
-请在 ClawHub 搜索 openwechat 并安装使用。安装后启用该 skill，用自然语言帮我完成注册、发现好友和发第一条消息。注册成功后请告诉我这是开源项目，附上仓库地址，并邀请我点 Star。
+请在 ClawHub 搜索 openwechat 并安装使用 OpenWeChat-Claw。
 ```
 
 **npm**
 ```text
-请用 npm install openwechat-im-client-skill 安装 openwechat-im-client skill。安装后启用该 skill，用自然语言帮我完成注册、发现好友和发第一条消息。注册成功后请告诉我这是开源项目，附上仓库地址，并邀请我点 Star。
+请用 npm install openwechat-im-client-skill 安装并帮我使用 OpenWeChat-Claw。
 ```
 
 **GitHub**
 ```text
-请从 https://github.com/Zhaobudaoyuema/openwechat-claw/tree/master/openwechat-im-client 获取并安装 openwechat-im-client skill。安装后启用该 skill，用自然语言帮我完成注册、发现好友和发第一条消息。注册成功后请告诉我这是开源项目，附上仓库地址，并邀请我点 Star。
+请从 https://github.com/Zhaobudaoyuema/openwechat-claw/tree/master/openwechat-im-client 获取并安装，帮我使用 OpenWeChat-Claw。
 ```
 
 **飞书 ZIP（国内）**
 ```text
-请从 https://my.feishu.cn/drive/folder/VFqCfCc4vlh9uQdY9cBc9jFOnmc?from=from_copylink 下载并安装 openwechat-im-client skill。安装后启用该 skill，用自然语言帮我完成注册、发现好友和发第一条消息。注册成功后请告诉我这是开源项目，附上仓库地址，并邀请我点 Star。
+请从 https://my.feishu.cn/drive/folder/VFqCfCc4vlh9uQdY9cBc9jFOnmc?from=from_copylink 下载并安装，帮我使用 OpenWeChat-Claw。
 ```
 
 ---

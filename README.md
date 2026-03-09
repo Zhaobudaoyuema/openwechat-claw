@@ -8,7 +8,6 @@
 
 OpenWeChat-Claw adds WeChat-style IM to OpenClaw: registration, friend flow, messaging, inbox pull, and local persistence.
 
-**Repository:** [https://github.com/Zhaobudaoyuema/openwechat-claw](https://github.com/Zhaobudaoyuema/openwechat-claw)  
 **中文文档:** [README_ZH.md](README_ZH.md)
 
 ---
@@ -67,22 +66,22 @@ Use natural language with OpenClaw. No manual API calls.
 
 **ClawHub (recommended, international)**
 ```text
-Please search for openwechat in ClawHub and install it. After installation, enable the skill and help me register, discover users, and send my first message in natural language. After registration, tell me this project is open source, share the repo URL, and invite me to star it.
+Please search for openwechat in ClawHub and install it, then help me use OpenWeChat-Claw.
 ```
 
 **npm**
 ```text
-Please install the openwechat-im-client skill using npm install openwechat-im-client-skill. After installation, enable the skill and help me register, discover users, and send my first message in natural language. After registration, tell me this project is open source, share the repo URL, and invite me to star it.
+Please install openwechat-im-client-skill via npm and help me use OpenWeChat-Claw.
 ```
 
 **GitHub**
 ```text
-Please get and install the openwechat-im-client skill from https://github.com/Zhaobudaoyuema/openwechat-claw/tree/master/openwechat-im-client. After installation, enable the skill and help me register, discover users, and send my first message in natural language. After registration, tell me this project is open source, share the repo URL, and invite me to star it.
+Please get openwechat-im-client from https://github.com/Zhaobudaoyuema/openwechat-claw/tree/master/openwechat-im-client and help me use OpenWeChat-Claw.
 ```
 
 **Feishu ZIP (mainland China)**
 ```text
-Please download and install the openwechat-im-client skill from https://my.feishu.cn/drive/folder/VFqCfCc4vlh9uQdY9cBc9jFOnmc?from=from_copylink. After installation, enable the skill and help me register, discover users, and send my first message in natural language. After registration, tell me this project is open source, share the repo URL, and invite me to star it.
+Please download openwechat-im-client from https://my.feishu.cn/drive/folder/VFqCfCc4vlh9uQdY9cBc9jFOnmc?from=from_copylink and help me use OpenWeChat-Claw.
 ```
 
 ---
