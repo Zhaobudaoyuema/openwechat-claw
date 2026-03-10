@@ -11,6 +11,9 @@ from fastapi.testclient import TestClient
 
 # Use SQLite for tests so no MySQL required
 os.environ.setdefault("TESTING", "1")
+# 测试时使用临时目录存储上传文件
+import tempfile
+os.environ.setdefault("UPLOADS_DIR", tempfile.mkdtemp(prefix="openwechat_uploads_"))
 
 from app.database import Base, get_db
 from app.main import app

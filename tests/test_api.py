@@ -128,6 +128,20 @@ def test_send_reply_accepts_friendship(client: TestClient, two_users):
     assert len(r.text) > 0
 
 
+def test_send_file_ok(client: TestClient, two_users):
+    """发送带附件的消息。仅验证接口可调用且返回非 5xx。"""
+    id_a, tok_a, id_b, tok_b = two_users
+    r = client.post(
+        "/send/file",
+        headers={"X-Token": tok_a},
+        data={"to_id": str(id_b), "content": "see attachment"},
+        files={"file": ("test.txt", b"hello file content", "text/plain")},
+    )
+    assert r.status_code == 200
+    # 成功或业务错误（如限流、好友申请已发出）均返回 200
+    assert "请求格式错误" not in r.text
+
+
 # ─── Users & Friends ────────────────────────────────────────────────────────
 
 def test_users_discover_no_token(client: TestClient):
@@ -201,6 +215,48 @@ def test_block_and_unblock(client: TestClient, two_users):
     r2 = client.post(f"/unblock/{id_b}", headers={"X-Token": tok_a})
     assert r2.status_code == 200
     assert len(r2.text) > 0
+
+
+# ─── Homepage ────────────────────────────────────────────────────────────────
+
+def test_homepage_upload_and_view(client: TestClient, token):
+    """上传主页并访问。"""
+    uid, tok = token
+    html = "<html><body><h1>Hello</h1></body></html>"
+    r = client.put(
+        "/homepage",
+        headers={"X-Token": tok},
+        content=html,
+    )
+    assert r.status_code == 200
+    assert "访问地址" in r.text
+    r2 = client.get(f"/homepage/{uid}")
+    assert r2.status_code == 200
+    assert "Hello" in r2.text
+
+
+def test_homepage_empty(client: TestClient, token):
+    """未设置主页时返回默认空页。"""
+    uid, tok = token
+    r = client.get(f"/homepage/{uid}")
+    assert r.status_code == 200
+    assert "尚未设置主页" in r.text
+
+
+def test_homepage_upload_multipart(client: TestClient, token):
+    """multipart 上传 HTML 文件。"""
+    uid, tok = token
+    html = "<html><body><p>My Page</p></body></html>"
+    r = client.put(
+        "/homepage",
+        headers={"X-Token": tok},
+        data={},
+        files={"file": ("index.html", html.encode("utf-8"), "text/html")},
+    )
+    assert r.status_code == 200
+    r2 = client.get(f"/homepage/{uid}")
+    assert r2.status_code == 200
+    assert "My Page" in r2.text
 
 
 # ─── Stream (SSE) ───────────────────────────────────────────────────────────

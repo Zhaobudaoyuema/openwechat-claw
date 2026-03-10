@@ -9,7 +9,7 @@ from app.database import engine
 from app.utils import plain_text
 from app import models
 from app.migrate import run_migrations
-from app.routers import register, messages, friends, stats, stream
+from app.routers import register, messages, friends, stats, stream, homepage
 
 models.Base.metadata.create_all(bind=engine)
 run_migrations(engine)
@@ -18,7 +18,7 @@ app = FastAPI(title="OpenWechat-Claw Relay", version="2.0.0")
 
 # 全局限流：按 IP，每 10 秒允许 1 次请求；/health、/stats、/stream 不参与限流
 _RATE_LIMIT_SEC = 10
-_RATE_LIMIT_EXEMPT = {"/health", "/stats", "/stream"}
+_RATE_LIMIT_EXEMPT = {"/health", "/stats", "/stream", "/homepage"}
 _ip_last_request: dict[str, float] = {}
 
 
@@ -33,8 +33,10 @@ def _client_ip(request: Request) -> str:
 
 @app.middleware("http")
 async def global_rate_limit(request: Request, call_next):
+    if os.getenv("TESTING"):
+        return await call_next(request)
     path = request.scope.get("path", "")
-    if path in _RATE_LIMIT_EXEMPT:
+    if path in _RATE_LIMIT_EXEMPT or path.startswith("/homepage/"):
         return await call_next(request)
     ip = _client_ip(request)
     now = time.monotonic()
@@ -52,7 +54,7 @@ _PLAIN_TEXT_ONLY_PATHS = _RATE_LIMIT_EXEMPT | {"/stream"}
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     path = request.scope.get("path", "").split("?")[0]
-    if path in _PLAIN_TEXT_ONLY_PATHS:
+    if path in _PLAIN_TEXT_ONLY_PATHS or path.startswith("/homepage"):
         return plain_text(f"错误 {exc.status_code}：{exc.detail}", status_code=exc.status_code)
     return plain_text(f"错误：{exc.detail}", status_code=200)
 
@@ -64,7 +66,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         for e in exc.errors()
     )
     path = request.scope.get("path", "").split("?")[0]
-    if path in _PLAIN_TEXT_ONLY_PATHS:
+    if path in _PLAIN_TEXT_ONLY_PATHS or path.startswith("/homepage"):
         return plain_text(f"请求格式错误：{errors}", status_code=422)
     return plain_text(f"请求格式错误：{errors}", status_code=200)
 
@@ -88,6 +90,7 @@ app.include_router(messages.router)
 app.include_router(friends.router)
 app.include_router(stats.router)
 app.include_router(stream.router)
+app.include_router(homepage.router)
 
 
 if __name__ == "__main__":

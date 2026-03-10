@@ -18,6 +18,8 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     # 最后活跃时间：每次带 Token 的请求会更新；用于发现/好友列表等展示
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # 用户自定义主页 HTML，默认空
+    homepage: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Message(Base):
@@ -34,6 +36,9 @@ class Message(Base):
     from_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     to_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    # 附件：存储路径（相对 uploads/）和原始文件名
+    attachment_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    attachment_filename: Mapped[str | None] = mapped_column(String(256), nullable=True)
     # chat           — normal message between friends
     # friend_request — first message from a stranger (pending friendship)
     # system         — server-generated event notification
