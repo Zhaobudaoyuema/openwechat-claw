@@ -29,17 +29,11 @@ OpenWeChat-Claw adds WeChat-style IM to OpenClaw: registration, friend flow, mes
 
 ---
 
-## Skill (`openwechat-im-client/SKILL.md`)
+## Skill (`openwechat-im-client`)
 
-The skill tells OpenClaw how to run this project:
+The skill guides OpenClaw to use OpenWeChat-Claw: register, send/receive messages, friend list, discover users, block/unblock. Local persistence under `.data`, SSE-first transport.
 
-- Registration, token usage, profile/status management
-- Messaging + inbox with read-and-clear rules
-- Friendship states: `pending`, `accepted`, `blocked`
-- Local persistence under `.data`
-- SSE-first channel with fallback and session routing
-
-Full detail: [openwechat-im-client/SKILL.md](openwechat-im-client/SKILL.md)
+**Skill repo (client + server open-source declaration):** [openwechat_im_client](https://github.com/Zhaobudaoyuema/openwechat_im_client)
 
 ---
 
@@ -47,9 +41,8 @@ Full detail: [openwechat-im-client/SKILL.md](openwechat-im-client/SKILL.md)
 
 ### International (GitHub / ClawHub / npm)
 
-- **ClawHub direct search (recommended):** Search for openwechat in ClawHub and install—see "Copy and send to OpenClaw" below
-- **GitHub:** [openwechat-im-client](https://github.com/Zhaobudaoyuema/openwechat-claw/tree/master/openwechat-im-client)
-- **ClawHub ZIP:** [download](https://wry-manatee-359.convex.site/api/v1/download?slug=openwechat-im-client)
+- **ClawHub ZIP (recommended):** [直接下载](https://wry-manatee-359.convex.site/api/v1/download?slug=openwechat-im-client) — 若下载失败，则在 ClawHub 搜索 openwechat，勾选「显示隐藏的」后安装
+- **GitHub:** [openwechat_im_client](https://github.com/Zhaobudaoyuema/openwechat_im_client)
 - **npm:** `npm install openwechat-im-client-skill`
 
 ### Mainland China (Feishu)
@@ -66,7 +59,7 @@ Use natural language with OpenClaw. No manual API calls.
 
 **ClawHub (recommended, international)**
 ```text
-Please search for openwechat in ClawHub and install it, then help me use OpenWeChat-Claw.
+请先从 https://wry-manatee-359.convex.site/api/v1/download?slug=openwechat-im-client 下载 openwechat-im-client；若下载失败，则在 ClawHub 搜索 openwechat，勾选「显示隐藏的」后安装，然后帮我使用 OpenWeChat-Claw。
 ```
 
 **npm**
@@ -76,7 +69,7 @@ Please install openwechat-im-client-skill via npm and help me use OpenWeChat-Cla
 
 **GitHub**
 ```text
-Please get openwechat-im-client from https://github.com/Zhaobudaoyuema/openwechat-claw/tree/master/openwechat-im-client and help me use OpenWeChat-Claw.
+Please get openwechat-im-client from https://github.com/Zhaobudaoyuema/openwechat_im_client and help me use OpenWeChat-Claw.
 ```
 
 **Feishu ZIP (mainland China)**

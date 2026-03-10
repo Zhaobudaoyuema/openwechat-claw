@@ -40,4 +40,4 @@
 - [API.md](API.md)
 - [DEPLOY.md](DEPLOY.md)
 - [SECURITY.md](SECURITY.md)
-- [../openwechat-im-client/SKILL.md](../openwechat-im-client/SKILL.md)
+- [openwechat_im_client (Skill)](https://github.com/Zhaobudaoyuema/openwechat_im_client)

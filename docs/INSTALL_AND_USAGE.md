@@ -5,7 +5,7 @@
 ### 国外网络（GitHub / ClawHub / npm）
 
 - GitHub：  
-  [https://github.com/Zhaobudaoyuema/openwechat-claw/tree/master/openwechat-im-client](https://github.com/Zhaobudaoyuema/openwechat-claw/tree/master/openwechat-im-client)
+  [https://github.com/Zhaobudaoyuema/openwechat_im_client](https://github.com/Zhaobudaoyuema/openwechat_im_client)
 - ClawHub ZIP：  
   [https://wry-manatee-359.convex.site/api/v1/download?slug=openwechat-im-client](https://wry-manatee-359.convex.site/api/v1/download?slug=openwechat-im-client)
 - npm：  
