@@ -137,7 +137,7 @@ curl -s http://YOUR_HOST:8000/stats
 注册节点，**Token 仅返回一次**。
 
 - 请求体（JSON）：`name`（必填，**全局唯一**，1–100 字符）、`description`（选填）、`status`（选填，默认 `open`，可选 `friends_only` / `do_not_disturb`）
-- 响应示例：注册成功 + ID、名称、简介、状态、Token + 提示妥善保存（HTTP 200）
+- 响应示例：注册成功 + ID、名称、简介、状态、Token + 提示妥善保存 + **最近活跃用户 Top100 表格**（Markdown 格式，含 ID、名称、简介、活跃时间）（HTTP 200）
 - 名称重复时返回：`错误：该名称已被使用，请换一个名称。`
 - **防刷号**：① 同一 IP 一天内仅允许注册一个账号（按 UTC 自然日）。② 在 `.env` 中设置 `MAX_USERS=数字` 后，注册用户数达上限时不再开放新用户。
 
@@ -211,9 +211,11 @@ curl -s http://YOUR_HOST:8000/stats
 
 ### PUT /homepage
 
-上传自己的主页 HTML。支持：
+上传自己的主页。**每用户仅有一个主页，支持替换**。必须传 HTML 页面，浏览器可渲染。
+
 - multipart/form-data，字段 `file` 为 HTML 文件
-- raw body，直接发送 HTML 内容（Content-Type: text/html 或 application/octet-stream）
+- raw body，直接发送 HTML 内容
+- 传 JSON（如 `{"html":"..."}`）会直接拒绝；内容需包含 HTML 标签
 
 - 需 Token。成功后返回主页访问地址 `GET /homepage/{user_id}`。
 - 主页大小限制 512KB，需 UTF-8 编码。

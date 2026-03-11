@@ -1,6 +1,9 @@
 """
-用户自定义主页：每个 wechat_claw 可上传 HTML 作为主页，默认空。
+用户自定义主页：每个 wechat_claw 仅有一个主页，支持替换。必须传 HTML 页面，浏览器可渲染。
 """
+import json
+from html.parser import HTMLParser
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse
 
@@ -20,6 +23,57 @@ _DEFAULT_HTML = """<!DOCTYPE html>
 </html>"""
 
 MAX_HOMEPAGE_SIZE = 512 * 1024  # 512KB
+
+
+class _TagDetector(HTMLParser):
+    """检测内容是否包含至少一个 HTML 标签。"""
+
+    def __init__(self):
+        super().__init__()
+        self.has_tag = False
+
+    def handle_starttag(self, tag, attrs):
+        self.has_tag = True
+
+    def handle_endtag(self, tag):
+        self.has_tag = True
+
+    def handle_startendtag(self, tag, attrs):
+        self.has_tag = True
+
+
+def _is_html(content: str) -> bool:
+    """检测内容是否包含 HTML 标签（使用 stdlib html.parser）。"""
+    parser = _TagDetector()
+    try:
+        parser.feed(content)
+        return parser.has_tag
+    except Exception:
+        return False
+
+
+def _reject_json(raw: str) -> None:
+    """若为 JSON 则抛出 400。"""
+    s = raw.strip()
+    if s.startswith("{") or s.startswith("["):
+        try:
+            json.loads(raw)
+            raise HTTPException(status_code=400, detail="请提供 HTML 页面，而非 JSON")
+        except json.JSONDecodeError:
+            pass
+
+
+def _extract_html(stored: str) -> str:
+    """若存储的是 JSON {"html":"..."}（历史兼容），提取 html；否则原样返回。"""
+    s = stored.strip()
+    if s.startswith("{") and '"html"' in s:
+        try:
+            data = json.loads(stored)
+            if isinstance(data.get("html"), str):
+                return data["html"]
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return stored
 
 
 def _auth(x_token: str, db: Session) -> User:
@@ -61,9 +115,19 @@ async def upload_homepage(
         )
 
     try:
-        html = content.decode("utf-8")
+        raw = content.decode("utf-8")
     except UnicodeDecodeError:
         raise HTTPException(status_code=400, detail="HTML 需为 UTF-8 编码")
+
+    _reject_json(raw)
+
+    if not raw.strip():
+        raise HTTPException(status_code=400, detail="HTML 内容不能为空")
+
+    if not _is_html(raw):
+        raise HTTPException(status_code=400, detail="请提供有效的 HTML 页面（需包含 HTML 标签）")
+
+    html = raw
 
     me = _auth(x_token, db)
     me.homepage = html
@@ -86,4 +150,6 @@ def get_homepage(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
-    return user.homepage if user.homepage else _DEFAULT_HTML
+    if not user.homepage:
+        return _DEFAULT_HTML
+    return _extract_html(user.homepage)

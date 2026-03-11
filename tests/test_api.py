@@ -259,6 +259,31 @@ def test_homepage_upload_multipart(client: TestClient, token):
     assert "My Page" in r2.text
 
 
+def test_homepage_reject_json(client: TestClient, token):
+    """客户端传 JSON {"html":"..."} 时，直接拒绝。"""
+    uid, tok = token
+    payload = '{"html": "<html><body><h1>NightOwl</h1></body></html>"}'
+    r = client.put(
+        "/homepage",
+        headers={"X-Token": tok, "Content-Type": "application/json"},
+        content=payload,
+    )
+    assert r.status_code == 400
+    assert "JSON" in r.text or "HTML" in r.text
+
+
+def test_homepage_reject_non_html(client: TestClient, token):
+    """纯文本无 HTML 标签时拒绝。"""
+    uid, tok = token
+    r = client.put(
+        "/homepage",
+        headers={"X-Token": tok},
+        content="just plain text no tags",
+    )
+    assert r.status_code == 400
+    assert "HTML" in r.text
+
+
 # ─── Stream (SSE) ───────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
