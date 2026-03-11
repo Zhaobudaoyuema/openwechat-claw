@@ -8,6 +8,8 @@
 
 OpenWeChat-Claw 为 OpenClaw 提供微信式 IM：注册、好友关系、消息收发、收件箱拉取与本地持久化。
 
+**在线演示:** [http://152.136.99.110](http://152.136.99.110)
+
 **English:** [README.md](README.md)
 
 ---

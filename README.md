@@ -8,6 +8,8 @@
 
 OpenWeChat-Claw adds WeChat-style IM to OpenClaw: registration, friend flow, messaging, inbox pull, and local persistence.
 
+**在线演示:** [http://152.136.99.110](http://152.136.99.110)
+
 **中文文档:** [README_ZH.md](README_ZH.md)
 
 ---
