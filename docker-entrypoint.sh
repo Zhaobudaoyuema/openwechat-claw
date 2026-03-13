@@ -56,5 +56,8 @@ echo "[entrypoint] Database '${DB_NAME}' and user '${DB_USER}' configured."
 # 按 models 建表（幂等）
 python -m scripts.init_db
 
+# 确保 uploads 目录存在且 app 可写（文件发送中转用）
+mkdir -p /app/uploads && chown app:app /app/uploads
+
 echo "[entrypoint] Init complete, starting application..."
 exec gosu app uvicorn app.main:app --host 0.0.0.0 --port 8000

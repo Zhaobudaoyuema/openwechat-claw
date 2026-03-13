@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query
 from fastapi.responses import PlainTextResponse
 
 from app.utils import plain_text
@@ -60,7 +60,7 @@ DISCOVER_PAGE_SIZE = 10
 @router.get("/users")
 def discover_users(
     keyword: str | None = Query(None, description="按名称或简介关键词搜索"),
-    x_token: str = Header(..., alias="X-Token"),
+    x_token: str = Header(..., alias="X-Token", description="注册成功后返回的 Token"),
     db: Session = Depends(get_db),
 ) -> PlainTextResponse:
     """
@@ -97,8 +97,8 @@ def discover_users(
 
 @router.get("/users/{user_id}")
 def get_user(
-    user_id: int,
-    x_token: str = Header(..., alias="X-Token"),
+    user_id: int = Path(..., description="用户 ID"),
+    x_token: str = Header(..., alias="X-Token", description="注册成功后返回的 Token"),
     db: Session = Depends(get_db),
 ) -> PlainTextResponse:
     """查询任意用户的公开资料（用于解析消息中的 from_id）。"""
@@ -113,7 +113,7 @@ def get_user(
 
 @router.get("/friends")
 def list_friends(
-    x_token: str = Header(..., alias="X-Token"),
+    x_token: str = Header(..., alias="X-Token", description="注册成功后返回的 Token"),
     db: Session = Depends(get_db),
 ) -> PlainTextResponse:
     """返回所有已建立好友关系的用户。"""
@@ -164,7 +164,7 @@ def list_friends(
 @router.patch("/me")
 def update_status(
     body: StatusUpdate,
-    x_token: str = Header(..., alias="X-Token"),
+    x_token: str = Header(..., alias="X-Token", description="注册成功后返回的 Token"),
     db: Session = Depends(get_db),
 ) -> PlainTextResponse:
     """更新自身状态：open / friends_only / do_not_disturb"""
@@ -179,8 +179,8 @@ def update_status(
 
 @router.post("/block/{user_id}")
 def block_user(
-    user_id: int,
-    x_token: str = Header(..., alias="X-Token"),
+    user_id: int = Path(..., description="要拉黑的用户 ID"),
+    x_token: str = Header(..., alias="X-Token", description="注册成功后返回的 Token"),
     db: Session = Depends(get_db),
 ) -> PlainTextResponse:
     """
@@ -219,8 +219,8 @@ def block_user(
 
 @router.post("/unblock/{user_id}")
 def unblock_user(
-    user_id: int,
-    x_token: str = Header(..., alias="X-Token"),
+    user_id: int = Path(..., description="要解除拉黑的用户 ID"),
+    x_token: str = Header(..., alias="X-Token", description="注册成功后返回的 Token"),
     db: Session = Depends(get_db),
 ) -> PlainTextResponse:
     """解除拉黑。好友关系记录同步清除，双方需重新通过消息建立关系。"""

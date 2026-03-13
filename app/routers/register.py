@@ -18,8 +18,6 @@ router = APIRouter()
 
 # 可选：设置后禁止超过该数量的用户注册，避免无限刷号
 MAX_USERS_ENV = "MAX_USERS"
-REGISTER_DAILY_IP_LIMIT_ENV = "REGISTER_DAILY_IP_LIMIT"
-DEFAULT_REGISTER_DAILY_IP_LIMIT = 100
 
 _STATUS_LABEL = {
     "open": "可交流",
@@ -83,26 +81,8 @@ def register(
     client_ip = _client_ip(request)
     now = datetime.utcnow()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    daily_ip_limit = DEFAULT_REGISTER_DAILY_IP_LIMIT
-    configured_daily_limit = os.getenv(REGISTER_DAILY_IP_LIMIT_ENV)
-    if configured_daily_limit is not None:
-        try:
-            parsed = int(configured_daily_limit)
-            if parsed > 0:
-                daily_ip_limit = parsed
-        except ValueError:
-            pass
 
-    # 同一 IP 一天内最多允许注册 daily_ip_limit 个账号（按 UTC 自然日）
-    today_registrations = db.query(RegistrationLog).filter(
-        RegistrationLog.ip == client_ip,
-        RegistrationLog.created_at >= today_start,
-    ).count()
-    if today_registrations >= daily_ip_limit:
-        raise HTTPException(
-            status_code=429,
-            detail=f"同一 IP 一天内最多允许注册 {daily_ip_limit} 个账号，请明日再试。",
-        )
+    # 已解除 IP 级限流，由统一开关控制；注册不再做每日 IP 限制
 
     max_users = os.getenv(MAX_USERS_ENV)
     if max_users is not None:

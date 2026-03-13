@@ -5,45 +5,61 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 import uvicorn
 
-from app.database import engine
+from app.database import engine, SessionLocal
+from app.models import User
 from app.utils import plain_text
 from app import models
 from app.migrate import run_migrations
-from app.routers import register, messages, friends, stats, stream, homepage
+from app.routers import admin, register, messages, friends, stats, stream, homepage
 
 models.Base.metadata.create_all(bind=engine)
 run_migrations(engine)
 
 app = FastAPI(title="OpenWechat-Claw Relay", version="2.0.0")
 
-# 全局限流：按 IP，每 10 秒允许 1 次请求；/health、/stats、/stream 不参与限流
-_RATE_LIMIT_SEC = 10
-_RATE_LIMIT_EXEMPT = {"/health", "/stats", "/stream", "/homepage"}
-_ip_last_request: dict[str, float] = {}
+# 限流：由 RATE_LIMIT_ENABLED 控制，启用时为用户级限流（按 X-Token 解析的 user_id）
+_RATE_LIMIT_EXEMPT = {"/health", "/stats", "/stream", "/homepage", "/register"}
+_RATE_LIMIT_EXEMPT_PREFIX = ("/homepage/", "/admin/")
+_USER_RATE_LIMIT_SEC = int(os.getenv("USER_RATE_LIMIT_SEC", "10"))
+_USER_RATE_LIMIT_PER_WINDOW = int(os.getenv("USER_RATE_LIMIT_PER_WINDOW", "5"))
+_user_last_requests: dict[int, list[float]] = {}  # user_id -> [timestamps]
 
 
-def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip() or "0.0.0.0"
-    if request.client:
-        return request.client.host
-    return "0.0.0.0"
+def _check_user_rate_limit(app, x_token: str | None) -> bool:
+    """若超限返回 True（应拒绝），否则返回 False（放行）。"""
+    if not x_token:
+        return False
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.token == x_token).first()
+        if not user:
+            return False
+        now = time.monotonic()
+        lst = _user_last_requests.setdefault(user.id, [])
+        cutoff = now - _USER_RATE_LIMIT_SEC
+        while lst and lst[0] < cutoff:
+            lst.pop(0)
+        if len(lst) >= _USER_RATE_LIMIT_PER_WINDOW:
+            return True
+        lst.append(now)
+        return False
+    finally:
+        db.close()
 
 
 @app.middleware("http")
-async def global_rate_limit(request: Request, call_next):
+async def rate_limit_middleware(request: Request, call_next):
     if os.getenv("TESTING"):
         return await call_next(request)
     path = request.scope.get("path", "")
-    if path in _RATE_LIMIT_EXEMPT or path.startswith("/homepage/"):
+    if path in _RATE_LIMIT_EXEMPT or any(path.startswith(p) for p in _RATE_LIMIT_EXEMPT_PREFIX):
         return await call_next(request)
-    ip = _client_ip(request)
-    now = time.monotonic()
-    last = _ip_last_request.get(ip, 0)
-    if now - last < _RATE_LIMIT_SEC:
-        return plain_text("错误：请求过于频繁，请稍后再试。", status_code=200)
-    _ip_last_request[ip] = now
+    enabled = getattr(request.app.state, "rate_limit_enabled", True)
+    if not enabled:
+        return await call_next(request)
+    x_token = request.headers.get("X-Token")
+    if _check_user_rate_limit(request.app, x_token):
+        return plain_text("错误：请求过于频繁，请稍后再试。", status_code=429)
     return await call_next(request)
 
 
@@ -54,7 +70,7 @@ _PLAIN_TEXT_ONLY_PATHS = _RATE_LIMIT_EXEMPT | {"/stream"}
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     path = request.scope.get("path", "").split("?")[0]
-    if path in _PLAIN_TEXT_ONLY_PATHS or path.startswith("/homepage"):
+    if path in _PLAIN_TEXT_ONLY_PATHS or path.startswith("/homepage") or path.startswith("/admin"):
         return plain_text(f"错误 {exc.status_code}：{exc.detail}", status_code=exc.status_code)
     return plain_text(f"错误：{exc.detail}", status_code=200)
 
@@ -77,14 +93,21 @@ def health():
     return {"status": "ok"}
 
 
+def _parse_rate_limit_enabled() -> bool:
+    v = os.getenv("RATE_LIMIT_ENABLED", "1")
+    return v.strip().lower() not in ("0", "false", "off", "")
+
+
 @app.on_event("startup")
 async def startup():
     import asyncio
     app.state.loop = asyncio.get_running_loop()
     app.state.sse_by_ip = {}
     app.state.sse_by_user = {}
+    app.state.rate_limit_enabled = _parse_rate_limit_enabled()
 
 
+app.include_router(admin.router)
 app.include_router(register.router)
 app.include_router(messages.router)
 app.include_router(friends.router)

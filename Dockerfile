@@ -31,6 +31,9 @@ COPY scripts/ ./scripts/
 COPY docker-entrypoint.sh .
 RUN sed -i 's/\r$//' docker-entrypoint.sh && chmod +x docker-entrypoint.sh
 
+# 确保 uploads 目录存在且 app 用户可写（文件发送中转用）
+RUN mkdir -p /app/uploads && chown app:app /app/uploads
+
 # 数据目录（运行时挂卷持久化）
 VOLUME /var/lib/mysql
 

@@ -1,5 +1,5 @@
 """
-SSE 推送：GET /stream，每 IP 仅允许 1 条连接。
+SSE 推送：GET /stream，每用户可建立多条连接。
 推送成功则服务端不落库（见 messages 路由）。
 支持重试：断开后客户端可立即重连；每次请求返回日志事件。
 """
@@ -78,13 +78,27 @@ async def _stream_generator(
             except asyncio.TimeoutError:
                 yield ": ping\n\n".encode(_SSE_CHARSET)
     finally:
-        # 断开时从注册表移除，便于该 IP 再次连接（支持重试）
+        # 断开时从注册表移除
         if hasattr(app.state, "sse_by_ip") and client_ip in app.state.sse_by_ip:
-            _, q = app.state.sse_by_ip.pop(client_ip, (None, None))
-            if q is not None and hasattr(app.state, "sse_by_user"):
+            conns = app.state.sse_by_ip[client_ip]
+            to_remove = None
+            if isinstance(conns, list):
+                for i, (uid, q) in enumerate(conns):
+                    if uid == user_id and q is queue:
+                        to_remove = i
+                        break
+                if to_remove is not None:
+                    conns.pop(to_remove)
+                if not conns:
+                    app.state.sse_by_ip.pop(client_ip, None)
+            else:
+                # 兼容旧格式 (user_id, queue)
+                if conns[0] == user_id and conns[1] is queue:
+                    app.state.sse_by_ip.pop(client_ip, None)
+            if hasattr(app.state, "sse_by_user"):
                 lst = app.state.sse_by_user.get(user_id, [])
-                if q in lst:
-                    lst.remove(q)
+                if queue in lst:
+                    lst.remove(queue)
                     if not lst:
                         app.state.sse_by_user.pop(user_id, None)
         disconnect_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -95,13 +109,13 @@ async def _stream_generator(
 @router.get("/stream", response_model=None)
 async def stream(
     request: Request,
-    x_token: str = Header(..., alias="X-Token"),
-    x_request_id: str | None = Header(None, alias="X-Request-ID"),
+    x_token: str = Header(..., alias="X-Token", description="注册成功后返回的 Token"),
+    x_request_id: str | None = Header(None, alias="X-Request-ID", description="可选，用于日志追踪"),
     db: Session = Depends(get_db),
 ) -> StreamingResponse | PlainTextResponse:
     """
     建立 SSE 长连接，接收推送给当前用户的新消息。
-    每 IP 仅允许 1 条连接；推送成功时服务端不落库。
+    推送成功时服务端不落库。
     支持重试：断开后可立即重连；每次连接首条事件为 log，便于客户端/模型操作重试。
     """
     request_id = x_request_id or str(uuid.uuid4())[:8]
@@ -119,17 +133,10 @@ async def stream(
     if not hasattr(app.state, "sse_by_user"):
         app.state.sse_by_user = {}
 
-    if client_ip in app.state.sse_by_ip:
-        logger.warning("[stream] connection_limit request_id=%s ip=%s", request_id, client_ip)
-        # Retry-After 便于客户端/模型实现重试退避
-        return plain_text(
-            "错误：该 IP 的 SSE 连接数已达上限（最多 1 条）。断开后请重试。",
-            status_code=429,
-            headers={"Retry-After": "2"},
-        )
+    # 已解除 IP 级限流，允许多条连接
 
     queue: asyncio.Queue = asyncio.Queue()
-    app.state.sse_by_ip[client_ip] = (user.id, queue)
+    app.state.sse_by_ip.setdefault(client_ip, []).append((user.id, queue))
     app.state.sse_by_user.setdefault(user.id, []).append(queue)
 
     return StreamingResponse(

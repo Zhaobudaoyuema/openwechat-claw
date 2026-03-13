@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import math
 from datetime import datetime, timedelta, timezone
 
@@ -16,6 +17,7 @@ from app.schemas import SendRequest
 from app.routers import stream
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 STATS_KEY_TOTAL_MESSAGES = "total_messages"
 
 _SEP = "─" * 40
@@ -166,9 +168,9 @@ def _format_message(m: Message, senders: dict[int, User]) -> str:
 @router.get("/messages")
 def get_messages(
     request: Request,
-    limit: int = Query(100, ge=1, le=500),
-    from_id: int | None = None,
-    x_token: str = Header(..., alias="X-Token"),
+    limit: int = Query(100, ge=1, le=500, description="每次读取条数，默认 100，上限 500"),
+    from_id: int | None = Query(None, description="仅读取来自该用户 ID 的消息"),
+    x_token: str = Header(..., alias="X-Token", description="注册成功后返回的 Token，用于鉴权"),
     db: Session = Depends(get_db),
 ) -> PlainTextResponse:
     """
@@ -239,7 +241,7 @@ def _make_message(from_id: int | None, to_id: int, content: str, msg_type: str, 
 def send_message(
     request: Request,
     body: SendRequest,
-    x_token: str = Header(..., alias="X-Token"),
+    x_token: str = Header(..., alias="X-Token", description="注册成功后返回的 Token"),
     db: Session = Depends(get_db),
 ) -> PlainTextResponse:
     """
@@ -369,15 +371,15 @@ def _send_with_attachment(
 @router.post("/send/file")
 async def send_message_file(
     request: Request,
-    to_id: int = Form(...),
-    content: str = Form(""),
-    file: UploadFile | None = File(None),
-    x_token: str = Header(..., alias="X-Token"),
+    to_id: int = Form(..., description="接收方用户 ID，必填"),
+    content: str = Form("", description="消息正文，可选，最多 1000 字；与 file 至少提供一个"),
+    file: UploadFile | None = File(None, description="附件文件，可选；Content-Type 须为 multipart/form-data"),
+    x_token: str = Header(..., alias="X-Token", description="注册成功后返回的 Token"),
     db: Session = Depends(get_db),
 ) -> PlainTextResponse:
     """
-    发送带附件的消息。multipart/form-data：to_id（必填）、content（选填）、file（选填）。
-    content 与 file 至少需提供一个。
+    发送带附件的消息。Content-Type 须为 multipart/form-data。
+    字段：to_id（必填）、content（选填）、file（选填）。content 与 file 至少需提供一个。
     """
     if not (content.strip() or (file and file.filename)):
         raise HTTPException(status_code=400, detail="content 或 file 至少需提供一个")
@@ -386,13 +388,22 @@ async def send_message_file(
         raise HTTPException(status_code=400, detail="content 最多 1000 字")
 
     attachment_path, attachment_filename = None, None
-    if file and file.filename:
-        attachment_path, attachment_filename = await save_upload(file)
-
-    sender = _auth(x_token, db)
     try:
+        if file and file.filename:
+            attachment_path, attachment_filename = await save_upload(file)
+
+        sender = _auth(x_token, db)
         resp = _send_with_attachment(request, sender, to_id, content, attachment_path, attachment_filename, db)
         return resp
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(
+            "发送文件消息失败: to_id=%s attachment_path=%s error=%s",
+            to_id, attachment_path, str(e),
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="发送失败，请稍后重试") from e
     finally:
         # 文件仅中转，发出即删
         if attachment_path:

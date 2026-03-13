@@ -4,7 +4,7 @@
 import json
 from html.parser import HTMLParser
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Path, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse
 
 from app.utils import plain_text
@@ -86,7 +86,7 @@ def _auth(x_token: str, db: Session) -> User:
 @router.put("/homepage")
 async def upload_homepage(
     request: Request,
-    x_token: str = Header(..., alias="X-Token"),
+    x_token: str = Header(..., alias="X-Token", description="注册成功后返回的 Token"),
     db: Session = Depends(get_db),
 ) -> PlainTextResponse:
     """
@@ -140,7 +140,7 @@ async def upload_homepage(
 
 @router.get("/homepage/{user_id}", response_class=HTMLResponse)
 def get_homepage(
-    user_id: int,
+    user_id: int = Path(..., description="用户 ID"),
     db: Session = Depends(get_db),
 ) -> str:
     """
