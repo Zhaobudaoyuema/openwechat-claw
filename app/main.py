@@ -17,34 +17,48 @@ run_migrations(engine)
 
 app = FastAPI(title="OpenWechat-Claw Relay", version="2.0.0")
 
-# 限流：由 RATE_LIMIT_ENABLED 控制，启用时为用户级限流（按 X-Token 解析的 user_id）
+# 限流：由 RATE_LIMIT_ENABLED 控制，QPS 20，按 user_id 或 IP 统一限流
 _RATE_LIMIT_EXEMPT = {"/health", "/stats", "/stream", "/homepage", "/register"}
 _RATE_LIMIT_EXEMPT_PREFIX = ("/homepage/", "/admin/")
-_USER_RATE_LIMIT_SEC = int(os.getenv("USER_RATE_LIMIT_SEC", "10"))
-_USER_RATE_LIMIT_PER_WINDOW = int(os.getenv("USER_RATE_LIMIT_PER_WINDOW", "5"))
-_user_last_requests: dict[int, list[float]] = {}  # user_id -> [timestamps]
+_RATE_LIMIT_QPS = int(os.getenv("RATE_LIMIT_QPS", "20"))
+_RATE_LIMIT_WINDOW_SEC = 1.0
+_rate_limit_buckets: dict[str, list[float]] = {}  # key -> [timestamps]
 
 
-def _check_user_rate_limit(app, x_token: str | None) -> bool:
-    """若超限返回 True（应拒绝），否则返回 False（放行）。"""
-    if not x_token:
-        return False
-    db = SessionLocal()
-    try:
-        user = db.query(User).filter(User.token == x_token).first()
-        if not user:
-            return False
-        now = time.monotonic()
-        lst = _user_last_requests.setdefault(user.id, [])
-        cutoff = now - _USER_RATE_LIMIT_SEC
-        while lst and lst[0] < cutoff:
-            lst.pop(0)
-        if len(lst) >= _USER_RATE_LIMIT_PER_WINDOW:
-            return True
-        lst.append(now)
-        return False
-    finally:
-        db.close()
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip() or "0.0.0.0"
+    if request.client:
+        return request.client.host
+    return "0.0.0.0"
+
+
+def _get_rate_limit_key(request: Request, x_token: str | None) -> str:
+    """限流 key：有账号用 user_id，无账号用 IP，统一逻辑。"""
+    if x_token:
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter(User.token == x_token).first()
+            if user:
+                return f"user:{user.id}"
+        finally:
+            db.close()
+    return f"ip:{_client_ip(request)}"
+
+
+def _check_rate_limit(request: Request, x_token: str | None) -> bool:
+    """若超限返回 True（应拒绝），否则返回 False（放行）。QPS 限制。"""
+    key = _get_rate_limit_key(request, x_token)
+    now = time.monotonic()
+    lst = _rate_limit_buckets.setdefault(key, [])
+    cutoff = now - _RATE_LIMIT_WINDOW_SEC
+    while lst and lst[0] < cutoff:
+        lst.pop(0)
+    if len(lst) >= _RATE_LIMIT_QPS:
+        return True
+    lst.append(now)
+    return False
 
 
 @app.middleware("http")
@@ -58,7 +72,7 @@ async def rate_limit_middleware(request: Request, call_next):
     if not enabled:
         return await call_next(request)
     x_token = request.headers.get("X-Token")
-    if _check_user_rate_limit(request.app, x_token):
+    if _check_rate_limit(request, x_token):
         return plain_text("错误：请求过于频繁，请稍后再试。", status_code=429)
     return await call_next(request)
 
