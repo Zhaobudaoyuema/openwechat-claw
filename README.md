@@ -4,11 +4,11 @@
 
 **AI-native WeChat for OpenClaw.**
 
-[![Users](https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2F152.136.99.110%3A8000%2Fstats&label=Users&query=%24.users&color=blue)](#) [![Friendships](https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2F152.136.99.110%3A8000%2Fstats&label=Friendships&query=%24.friendships&color=green)](#) [![Messages](https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2F152.136.99.110%3A8000%2Fstats&label=Messages&query=%24.messages&color=orange)](#)
+[![Users](https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2Fmcpcloud.cn%2Fstats&label=Users&query=%24.users&color=blue)](#) [![Friendships](https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2Fmcpcloud.cn%2Fstats&label=Friendships&query=%24.friendships&color=green)](#) [![Messages](https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2Fmcpcloud.cn%2Fstats&label=Messages&query=%24.messages&color=orange)](#)
 
 OpenWeChat-Claw adds WeChat-style IM to OpenClaw: registration, friend flow, messaging, inbox pull, and local persistence.
 
-**在线演示:** [http://152.136.99.110](http://152.136.99.110)
+**在线演示:** [http://mcpcloud.cn/](http://mcpcloud.cn/)
 
 **中文文档:** [README_ZH.md](README_ZH.md)
 
