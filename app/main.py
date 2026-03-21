@@ -1,8 +1,10 @@
 import os
 import time
+from datetime import datetime, timedelta
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 from app.database import engine, SessionLocal
@@ -10,7 +12,8 @@ from app.models import User
 from app.utils import plain_text
 from app import models
 from app.migrate import run_migrations
-from app.routers import admin, register, messages, friends, stats, stream, homepage
+from app.routers import admin, register, messages, friends, stats, homepage, world, ws_client
+from app.world.state import WorldConfig, WorldState
 
 models.Base.metadata.create_all(bind=engine)
 run_migrations(engine)
@@ -18,7 +21,7 @@ run_migrations(engine)
 app = FastAPI(title="OpenWechat-Claw Relay", version="2.0.0")
 
 # 限流：由 RATE_LIMIT_ENABLED 控制，QPS 20，按 user_id 或 IP 统一限流
-_RATE_LIMIT_EXEMPT = {"/health", "/stats", "/stream", "/homepage", "/register"}
+_RATE_LIMIT_EXEMPT = {"/health", "/stats", "/homepage"}
 _RATE_LIMIT_EXEMPT_PREFIX = ("/homepage/", "/admin/")
 _RATE_LIMIT_QPS = int(os.getenv("RATE_LIMIT_QPS", "20"))
 _RATE_LIMIT_WINDOW_SEC = 1.0
@@ -77,8 +80,7 @@ async def rate_limit_middleware(request: Request, call_next):
     return await call_next(request)
 
 
-# 除 /health、/stats、/stream 外，所有接口统一返回 200 + 纯文本，错误信息不包含状态码
-_PLAIN_TEXT_ONLY_PATHS = _RATE_LIMIT_EXEMPT | {"/stream"}
+_PLAIN_TEXT_ONLY_PATHS = _RATE_LIMIT_EXEMPT
 
 
 @app.exception_handler(HTTPException)
@@ -116,9 +118,41 @@ def _parse_rate_limit_enabled() -> bool:
 async def startup():
     import asyncio
     app.state.loop = asyncio.get_running_loop()
-    app.state.sse_by_ip = {}
-    app.state.sse_by_user = {}
+    app.state.ws_clients = {}  # /ws/client 连接池：user_id → WebSocket
     app.state.rate_limit_enabled = _parse_rate_limit_enabled()
+
+    # 初始化 WorldState 并从 DB 恢复最近活跃用户位置
+    _world_state = WorldState(WorldConfig())
+    positions = _load_recent_positions()
+    if positions:
+        await asyncio.to_thread(_world_state.bulk_init_from_db, positions)
+    app.state.world_state = _world_state
+
+    from app.jobs.world_aggregator import start as start_scheduler
+    start_scheduler()
+
+
+def _load_recent_positions() -> list[tuple[int, int, int]]:
+    """从 DB 加载最近活跃用户的位置，供 bulk_init_from_db 使用。"""
+    try:
+        db = SessionLocal()
+        try:
+            cutoff = datetime.utcnow() - timedelta(days=7)
+            rows = db.query(User.id, User.last_x, User.last_y).filter(
+                User.last_x.isnot(None),
+                User.last_y.isnot(None),
+            ).all()
+            return [(r.id, r.last_x, r.last_y) for r in rows if r.last_x is not None and r.last_y is not None]
+        finally:
+            db.close()
+    except Exception:
+        return []
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    from app.jobs.world_aggregator import stop as stop_scheduler
+    stop_scheduler()
 
 
 app.include_router(admin.router)
@@ -126,8 +160,11 @@ app.include_router(register.router)
 app.include_router(messages.router)
 app.include_router(friends.router)
 app.include_router(stats.router)
-app.include_router(stream.router)
 app.include_router(homepage.router)
+app.include_router(world.router)
+app.include_router(ws_client.router)
+
+app.mount("/world", StaticFiles(directory="app/static/world", html=True), name="world")
 
 
 if __name__ == "__main__":

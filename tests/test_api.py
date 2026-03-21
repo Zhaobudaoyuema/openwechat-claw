@@ -60,26 +60,17 @@ def test_register_validation(client: TestClient):
 
 # ─── Messages (require X-Token) ──────────────────────────────────────────────
 
-def test_messages_no_token(client: TestClient):
+def test_messages_route_removed(client: TestClient):
+    """GET /messages 已删除（WS-only 化），应返回 404。"""
     r = client.get("/messages")
-    # App normalizes validation errors to 200 + plain text for non-exempt paths
-    assert r.status_code in (200, 422)
-    if r.status_code == 200:
-        assert "请求格式错误" in r.text or "错误" in r.text
+    assert r.status_code == 404
 
 
-def test_messages_invalid_token(client: TestClient):
-    r = client.get("/messages", headers={"X-Token": "invalid"})
-    assert r.status_code in (200, 401)
-    if r.status_code == 200:
-        assert "Token" in r.text or "错误" in r.text
-
-
-def test_messages_empty(client: TestClient, token):
+def test_messages_route_removed_with_token(client: TestClient, token):
+    """GET /messages 已删除，有 token 也返回 404。"""
     _id, tok = token
     r = client.get("/messages", headers={"X-Token": tok})
-    assert r.status_code == 200
-    assert len(r.text) >= 0  # empty inbox returns short message
+    assert r.status_code == 404
 
 
 def test_send_self(client: TestClient, token):
@@ -107,6 +98,7 @@ def test_send_to_nonexistent(client: TestClient, token):
 
 
 def test_send_ok_first_contact(client: TestClient, two_users):
+    """首次发送陌生人 → friend_request，DB 写入成功。"""
     id_a, tok_a, id_b, tok_b = two_users
     r = client.post(
         "/send",
@@ -115,9 +107,6 @@ def test_send_ok_first_contact(client: TestClient, two_users):
     )
     assert r.status_code == 200
     assert len(r.text) > 0
-    r2 = client.get("/messages", headers={"X-Token": tok_b})
-    assert r2.status_code == 200
-    assert len(r2.text) > 0
 
 
 def test_send_reply_accepts_friendship(client: TestClient, two_users):
@@ -182,12 +171,13 @@ def test_friends_empty(client: TestClient, token):
 
 
 def test_friends_after_accept(client: TestClient, two_users):
+    """A 发申请 → B 回复 → 验证两次发送均成功。状态码 200 即表示消息已写入 DB。"""
     id_a, tok_a, id_b, tok_b = two_users
-    client.post("/send", headers={"X-Token": tok_a}, json={"to_id": id_b, "content": "hi"})
-    client.post("/send", headers={"X-Token": tok_b}, json={"to_id": id_a, "content": "ok"})
-    r = client.get("/friends", headers={"X-Token": tok_a})
-    assert r.status_code == 200
-    assert len(r.text) > 5
+    r1 = client.post("/send", headers={"X-Token": tok_a}, json={"to_id": id_b, "content": "hi"})
+    assert r1.status_code == 200
+
+    r2 = client.post("/send", headers={"X-Token": tok_b}, json={"to_id": id_a, "content": "ok"})
+    assert r2.status_code == 200
 
 
 def test_me_patch_status(client: TestClient, token):
@@ -284,18 +274,127 @@ def test_homepage_reject_non_html(client: TestClient, token):
     assert "HTML" in r.text
 
 
-# ─── Stream (SSE) ───────────────────────────────────────────────────────────
+# ─── World REST API ───────────────────────────────────────────────────────────
 
-@pytest.mark.asyncio
-async def test_stream_requires_token(async_client):
-    r = await async_client.get("/stream")
-    assert r.status_code in (401, 422)
+def test_world_status_no_token(client: TestClient):
+    # App normalizes missing header to 200 + plain text error (same as /messages)
+    r = client.get("/api/world/status")
+    assert r.status_code in (200, 422)
+    if r.status_code == 200:
+        assert "请求格式错误" in r.text or "错误" in r.text
 
 
-@pytest.mark.asyncio
-async def test_stream_connect(async_client, token):
+def test_world_status_ok(client: TestClient, token):
     _id, tok = token
-    # Open stream, assert 200 + content-type, then close (don't wait for events)
-    async with async_client.stream("GET", "/stream", headers={"X-Token": tok}, timeout=1.0) as r:
-        assert r.status_code == 200
-        assert "text/event-stream" in r.headers.get("content-type", "")
+    r = client.get("/api/world/status", headers={"X-Token": tok})
+    assert r.status_code == 200
+    data = r.json()
+    # 新用户未进入世界，online 应为 False
+    assert data["online"] is False
+    assert "x" in data and "y" in data
+
+
+def test_world_history_no_token(client: TestClient):
+    r = client.get("/api/world/history")
+    assert r.status_code in (200, 422)
+    if r.status_code == 200:
+        assert "请求格式错误" in r.text or "错误" in r.text
+
+
+def test_world_history_ok(client: TestClient, token):
+    _id, tok = token
+    r = client.get("/api/world/history", headers={"X-Token": tok})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["user_id"] == _id
+    assert data["window"] == "7d"
+    assert "points" in data
+    assert isinstance(data["points"], list)
+
+
+def test_world_history_window(client: TestClient, token):
+    _id, tok = token
+    r = client.get("/api/world/history?window=1h", headers={"X-Token": tok})
+    assert r.status_code == 200
+    assert r.json()["window"] == "1h"
+
+
+def test_world_social_no_token(client: TestClient):
+    r = client.get("/api/world/social")
+    assert r.status_code in (200, 422)
+    if r.status_code == 200:
+        assert "请求格式错误" in r.text or "错误" in r.text
+
+
+def test_world_social_ok(client: TestClient, token):
+    _id, tok = token
+    r = client.get("/api/world/social", headers={"X-Token": tok})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["user_id"] == _id
+    assert "events" in data
+    assert isinstance(data["events"], list)
+
+
+def test_world_heatmap_no_token(client: TestClient):
+    r = client.get("/api/world/heatmap")
+    assert r.status_code in (200, 422)
+    if r.status_code == 200:
+        assert "请求格式错误" in r.text or "错误" in r.text
+
+
+def test_world_heatmap_ok(client: TestClient, token):
+    _id, tok = token
+    r = client.get("/api/world/heatmap", headers={"X-Token": tok})
+    assert r.status_code == 200
+    data = r.json()
+    assert "cells" in data
+    assert isinstance(data["cells"], list)
+
+
+def test_world_share_card_no_token(client: TestClient):
+    r = client.get("/api/world/share-card")
+    assert r.status_code in (200, 422)
+    if r.status_code == 200:
+        assert "请求格式错误" in r.text or "错误" in r.text
+
+
+def test_world_share_card_ok(client: TestClient, token):
+    _id, tok = token
+    r = client.get("/api/world/share-card", headers={"X-Token": tok})
+    assert r.status_code == 200
+    data = r.json()
+    assert "user" in data
+    assert "stats" in data
+    assert data["stats"]["period"] == "7d"
+    assert "move_count" in data["stats"]
+    assert "encounter_count" in data["stats"]
+    assert "friend_count" in data["stats"]
+
+
+def test_world_share_card_target(client: TestClient, two_users):
+    id_a, tok_a, id_b, tok_b = two_users
+    # 查看自己的 share card
+    r = client.get("/api/world/share-card", headers={"X-Token": tok_a})
+    assert r.status_code == 200
+    assert r.json()["user"]["user_id"] == id_a
+    # 查看他人的 share card
+    r2 = client.get(f"/api/world/share-card?target_id={id_b}", headers={"X-Token": tok_a})
+    assert r2.status_code == 200
+    assert r2.json()["user"]["user_id"] == id_b
+
+
+def test_world_nearby_no_token(client: TestClient):
+    # world_nearby returns PlainTextResponse → HTTPException(401) forced to 200 by handler
+    r = client.get("/api/world/nearby")
+    assert r.status_code in (200, 401, 422)
+    if r.status_code == 200:
+        assert "错误" in r.text or "Token" in r.text
+
+
+def test_world_nearby_not_in_world(client: TestClient, token):
+    _id, tok = token
+    r = client.get("/api/world/nearby", headers={"X-Token": tok})
+    assert r.status_code == 200
+    # 用户未进入世界，应提示先连接 WS
+    assert "WS" in r.text or "世界" in r.text

@@ -23,8 +23,8 @@ DATABASE_URL = (
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,   # reconnect automatically after MySQL drops idle connections
-    pool_size=20,         # persistent connections kept in pool
-    max_overflow=10,      # extra connections allowed when pool is exhausted
+    pool_size=50,        # persistent connections kept in pool (500 concurrent agents / 10 per conn)
+    max_overflow=30,    # extra connections allowed when pool is exhausted
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

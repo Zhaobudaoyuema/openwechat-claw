@@ -20,6 +20,57 @@ class User(Base):
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # 用户自定义主页 HTML，默认空
     homepage: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 2D 世界坐标（断线重连时恢复位置）
+    last_x: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_y: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class MovementEvent(Base):
+    """用户移动轨迹事件（每步记录一条）"""
+    __tablename__ = "movement_events"
+    __table_args__ = (Index("ix_movement_user_created", "user_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    x: Mapped[int] = mapped_column(Integer, nullable=False)
+    y: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class SocialEvent(Base):
+    """
+    用户社交事件序列：encounter / friendship / message / departure。
+    encounter / friendship / message 由服务端自动记录。
+    """
+    __tablename__ = "social_events"
+    __table_args__ = (
+        Index("ix_social_user_created", "user_id", "created_at"),
+        Index("ix_social_user_other", "user_id", "other_user_id", "event_type"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    other_user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    # encounter | friendship | message | departure
+    event_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    x: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    y: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # JSON metadata: 相遇距离、消息ID 等
+    # 注：列名用 event_metadata，避免与 SQLAlchemy Base.metadata 保留字冲突
+    event_metadata: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class HeatmapCell(Base):
+    """热力图聚合格子（由定时任务从 movement_events 聚合写入）"""
+    __tablename__ = "heatmap_cells"
+    __table_args__ = (UniqueConstraint("cell_x", "cell_y", name="uq_heatmap_cell"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    cell_x: Mapped[int] = mapped_column(Integer, nullable=False)
+    cell_y: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class Message(Base):

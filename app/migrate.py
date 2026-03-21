@@ -9,6 +9,7 @@ from sqlalchemy.engine import Engine
 def run_migrations(engine: Engine) -> None:
     """Run lightweight schema upgrades for existing databases."""
     _ensure_users_last_seen_at(engine)
+    _ensure_users_last_xy(engine)
     _drop_registration_log_daily_unique(engine)
     _ensure_messages_attachment_columns(engine)
     _ensure_users_homepage(engine)
@@ -30,6 +31,33 @@ def _ensure_users_last_seen_at(engine: Engine) -> None:
             conn.execute(text("ALTER TABLE users ADD COLUMN last_seen_at DATETIME"))
         else:
             conn.execute(text("ALTER TABLE users ADD COLUMN last_seen_at DATETIME NULL"))
+        conn.commit()
+
+
+def _ensure_users_last_xy(engine: Engine) -> None:
+    """Add last_x and last_y columns to users for 2D world position persistence."""
+    insp = inspect(engine)
+    if "users" not in insp.get_table_names():
+        return
+    columns = {c["name"] for c in insp.get_columns("users")}
+    if "last_x" in columns and "last_y" in columns:
+        return
+    with engine.connect() as conn:
+        dialect = engine.dialect.name
+        if "last_x" not in columns:
+            if dialect == "mysql":
+                conn.execute(text("ALTER TABLE users ADD COLUMN last_x INT NULL"))
+            elif dialect == "sqlite":
+                conn.execute(text("ALTER TABLE users ADD COLUMN last_x INTEGER"))
+            else:
+                conn.execute(text("ALTER TABLE users ADD COLUMN last_x INTEGER NULL"))
+        if "last_y" not in columns:
+            if dialect == "mysql":
+                conn.execute(text("ALTER TABLE users ADD COLUMN last_y INT NULL"))
+            elif dialect == "sqlite":
+                conn.execute(text("ALTER TABLE users ADD COLUMN last_y INTEGER"))
+            else:
+                conn.execute(text("ALTER TABLE users ADD COLUMN last_y INTEGER NULL"))
         conn.commit()
 
 
