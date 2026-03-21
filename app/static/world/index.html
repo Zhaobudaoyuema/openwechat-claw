@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>龙虾人生影院</title>
+  <style>
+    /* ============================================================
+       CSS Design Tokens
+    ============================================================ */
+    :root {
+      --color-bg: #0d0f1a;
+      --color-surface: #141821;
+      --color-surface-raised: #1c2230;
+      --color-border: #1f2733;
+      --color-primary: #d97706;
+      --color-primary-hover: #f59e0b;
+      --color-success: #3fb950;
+      --color-text: #e6e6e6;
+      --color-text-muted: #9aa4b2;
+      --color-error: #e63946;
+      --color-trail: #f0a500;
+      --color-trail-line: rgba(240, 165, 0, 0.3);
+      --color-heatmap-low: #2c7bb6;
+      --color-heatmap-mid: #abd9e9;
+      --color-heatmap-high: #fee08b;
+      --color-heatmap-peak: #d7191c;
+      --color-encounter: #e63946;
+      --color-friendship: rgba(63, 185, 80, 0.4);
+      --color-grid: rgba(255, 255, 255, 0.05);
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --transition-fast: 150ms ease-out;
+      --transition-normal: 200ms ease-out;
+      --header-height: 48px;
+      --timeline-height: 48px;
+    }
+
+    /* ============================================================
+       Reset & Base
+    ============================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      background: var(--color-bg);
+      color: var(--color-text);
+    }
+
+    /* ============================================================
+       App Layout
+    ============================================================ */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    /* ============================================================
+       Header
+    ============================================================ */
+    header {
+      height: var(--header-height);
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-border);
+      display: flex;
+      align-items: center;
+      padding: 0 var(--space-4);
+      gap: var(--space-3);
+      flex-shrink: 0;
+      z-index: 10;
+    }
+
+    .header-brand {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--color-text);
+      white-space: nowrap;
+      margin-right: var(--space-2);
+    }
+
+    .header-token {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      flex-shrink: 0;
+    }
+
+    .header-token label {
+      font-size: 12px;
+      color: var(--color-text-muted);
+      white-space: nowrap;
+    }
+
+    .header-token input {
+      width: 160px;
+      padding: var(--space-1) var(--space-2);
+      background: var(--color-surface-raised);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      color: var(--color-text);
+      font-size: 12px;
+      outline: none;
+      transition: border-color var(--transition-fast);
+    }
+    .header-token input:focus { border-color: var(--color-primary); }
+
+    .btn {
+      padding: var(--space-1) var(--space-3);
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      cursor: pointer;
+      transition: background var(--transition-fast), opacity var(--transition-fast);
+      white-space: nowrap;
+    }
+    .btn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-primary {
+      background: var(--color-primary);
+      color: #fff;
+    }
+    .btn-primary:hover:not(:disabled) { background: var(--color-primary-hover); }
+    .btn-primary.connected { background: var(--color-success); }
+
+    /* View Tabs */
+    .view-tabs {
+      display: flex;
+      background: var(--color-surface-raised);
+      border-radius: var(--radius-sm);
+      padding: 2px;
+      gap: 2px;
+    }
+    .view-tab {
+      padding: 3px var(--space-3);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      cursor: pointer;
+      color: var(--color-text-muted);
+      transition: background var(--transition-fast), color var(--transition-fast);
+      border: none;
+      background: transparent;
+    }
+    .view-tab:hover { color: var(--color-text); }
+    .view-tab.active { background: var(--color-surface); color: var(--color-text); }
+    .view-tab:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+    /* Window Pills */
+    .window-pills {
+      display: flex;
+      gap: var(--space-1);
+    }
+    .window-pill {
+      padding: 3px var(--space-2);
+      border-radius: 999px;
+      font-size: 11px;
+      cursor: pointer;
+      border: 1px solid var(--color-border);
+      background: transparent;
+      color: var(--color-text-muted);
+      transition: all var(--transition-fast);
+    }
+    .window-pill:hover { border-color: var(--color-primary); color: var(--color-text); }
+    .window-pill.active {
+      background: var(--color-primary);
+      border-color: var(--color-primary);
+      color: #fff;
+    }
+    .window-pill:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+    /* Share Button */
+    .btn-share {
+      background: var(--color-surface-raised);
+      color: var(--color-text-muted);
+      border: 1px solid var(--color-border);
+      margin-left: auto;
+    }
+    .btn-share:hover:not(:disabled) { border-color: var(--color-primary); color: var(--color-text); }
+    .btn-share:disabled { opacity: 0.4; }
+
+    /* ============================================================
+       Main Content
+    ============================================================ */
+    #main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #canvas-wrap {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #map-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Canvas overlay messages */
+    #canvas-msg {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      color: var(--color-text-muted);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity var(--transition-normal);
+    }
+    #canvas-msg.visible { opacity: 1; }
+    #canvas-msg.error { color: var(--color-error); }
+
+    /* ============================================================
+       Archive Panel (right sidebar)
+    ============================================================ */
+    #archive-panel {
+      width: 180px;
+      flex-shrink: 0;
+      background: var(--color-surface);
+      border-left: 1px solid var(--color-border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: width var(--transition-normal);
+    }
+    #archive-panel.collapsed { width: 0; border-left: none; }
+
+    .archive-header {
+      padding: var(--space-3);
+      border-bottom: 1px solid var(--color-border);
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .archive-header-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--color-text);
+      white-space: nowrap;
+    }
+    .archive-lobster { font-size: 16px; }
+
+    .archive-stats {
+      padding: var(--space-3);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+      overflow-y: auto;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .stat-value {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--color-text);
+      font-variant-numeric: tabular-nums;
+    }
+    .stat-label {
+      font-size: 11px;
+      color: var(--color-text-muted);
+    }
+    .stat-value.loading { color: var(--color-text-muted); }
+
+    .archive-footer {
+      margin-top: auto;
+      padding: var(--space-3);
+      border-top: 1px solid var(--color-border);
+    }
+    .btn-detail {
+      width: 100%;
+      background: var(--color-surface-raised);
+      color: var(--color-text-muted);
+      border: 1px solid var(--color-border);
+    }
+    .btn-detail:hover { border-color: var(--color-primary); color: var(--color-text); }
+
+    /* Expand/collapse toggle */
+    #panel-toggle {
+      position: absolute;
+      right: 180px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 16px;
+      height: 40px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-right: none;
+      border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: var(--color-text-muted);
+      transition: background var(--transition-fast), right var(--transition-normal);
+      z-index: 5;
+    }
+    #panel-toggle:hover { background: var(--color-surface-raised); }
+    #panel-toggle:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+    #panel-toggle.hidden { right: 0; }
+
+    /* ============================================================
+       Timeline
+    ============================================================ */
+    #timeline {
+      height: var(--timeline-height);
+      background: var(--color-surface);
+      border-top: 1px solid var(--color-border);
+      display: flex;
+      flex-direction: column;
+      padding: var(--space-2) var(--space-4);
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    #timeline-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--color-text-muted);
+      user-select: none;
+    }
+
+    #timeline-track {
+      position: relative;
+      height: 4px;
+      background: var(--color-border);
+      border-radius: 2px;
+      cursor: pointer;
+    }
+    #timeline-thumb {
+      position: absolute;
+      top: -4px;
+      width: 12px;
+      height: 12px;
+      background: var(--color-primary);
+      border-radius: 50%;
+      transform: translateX(-50%);
+      cursor: grab;
+      transition: background var(--transition-fast);
+    }
+    #timeline-thumb:active { cursor: grabbing; background: var(--color-primary-hover); }
+    #timeline-progress {
+      height: 100%;
+      background: var(--color-primary);
+      border-radius: 2px;
+      width: 0%;
+      pointer-events: none;
+    }
+
+    /* ============================================================
+       Toast / Error banner
+    ============================================================ */
+    #toast {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      z-index: 100;
+      pointer-events: none;
+    }
+    #toast-bar {
+      height: 100%;
+      background: var(--color-error);
+      width: 0%;
+      transition: width 300ms ease-out;
+    }
+    #toast.show #toast-bar { width: 100%; }
+
+    /* ============================================================
+       Share Modal
+    ============================================================ */
+    #share-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--transition-normal);
+    }
+    #share-modal.open { opacity: 1; pointer-events: all; }
+
+    .share-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: var(--space-4);
+      width: 400px;
+      max-width: 90vw;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    .share-card-header {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+    .share-card-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-heatmap-high) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+    .share-card-info { flex: 1; min-width: 0; }
+    .share-card-name {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--color-text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .share-card-subtitle {
+      font-size: 12px;
+      color: var(--color-text-muted);
+    }
+
+    .share-card-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-2);
+    }
+    .share-stat { text-align: center; }
+    .share-stat-val {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--color-text);
+    }
+    .share-stat-lbl { font-size: 11px; color: var(--color-text-muted); }
+
+    .share-card-quote {
+      font-size: 13px;
+      color: var(--color-text-muted);
+      text-align: center;
+      font-style: italic;
+    }
+
+    .share-card-actions {
+      display: flex;
+      gap: var(--space-2);
+    }
+    .btn-download {
+      flex: 1;
+      background: var(--color-primary);
+      color: #fff;
+    }
+    .btn-download:hover { background: var(--color-primary-hover); }
+    .btn-close-share {
+      background: var(--color-surface-raised);
+      color: var(--color-text-muted);
+      border: 1px solid var(--color-border);
+    }
+    .btn-close-share:hover { border-color: var(--color-primary); color: var(--color-text); }
+
+    /* ============================================================
+       Loading Spinner
+    ============================================================ */
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--color-border);
+      border-top-color: var(--color-primary);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ============================================================
+       Responsive
+    ============================================================ */
+    @media (max-width: 1023px) {
+      #archive-panel { width: 0; border-left: none; overflow: hidden; }
+      #panel-toggle { right: 0; }
+      #panel-toggle.hidden { right: 0; }
+      .header-brand { display: none; }
+    }
+
+    @media (max-width: 768px) {
+      header { gap: var(--space-2); padding: 0 var(--space-2); }
+      .header-token input { width: 100px; }
+      /* 移动端 tabs 收起，改为图标菜单 */
+      .view-tabs { display: none; }
+      #archive-panel { display: none; }
+      #panel-toggle { display: none; }
+      .share-card { width: 95vw; }
+      .share-card-stats { grid-template-columns: repeat(3, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" role="application" aria-label="龙虾人生影院">
+
+    <!-- Header -->
+    <header role="banner">
+      <div class="header-brand">🦞 龙虾人生</div>
+
+      <div class="header-token">
+        <label for="token-input">Token</label>
+        <input id="token-input" type="text" placeholder="Token" autocomplete="off" spellcheck="false" aria-label="用户令牌" />
+      </div>
+
+      <button id="connect-btn" class="btn btn-primary" aria-label="连接世界">连接</button>
+
+      <div class="view-tabs" role="tablist" aria-label="视图模式">
+        <button class="view-tab active" data-view="trail" role="tab" aria-selected="true">轨迹</button>
+        <button class="view-tab" data-view="heatmap" role="tab" aria-selected="false">热力</button>
+        <button class="view-tab" data-view="events" role="tab" aria-selected="false">事件</button>
+      </div>
+
+      <div class="window-pills" role="group" aria-label="时间窗口">
+        <button class="window-pill" data-window="1h">1h</button>
+        <button class="window-pill" data-window="24h">24h</button>
+        <button class="window-pill active" data-window="7d">7d</button>
+      </div>
+
+      <button id="share-btn" class="btn btn-share" disabled aria-label="生成分享卡片">分享</button>
+    </header>
+
+    <!-- Main content -->
+    <div id="main" role="main">
+      <div id="canvas-wrap">
+        <canvas id="map-canvas" aria-label="龙虾社交地图，显示轨迹、热力和相遇事件"></canvas>
+        <div id="canvas-msg" aria-live="polite" role="status"></div>
+      </div>
+
+      <button id="panel-toggle" aria-label="展开档案面板" title="展开档案">◀</button>
+
+      <aside id="archive-panel" aria-label="档案面板">
+        <div class="archive-header">
+          <span class="archive-lobster">🦞</span>
+          <span class="archive-header-title" id="panel-username">—</span>
+        </div>
+        <div class="archive-stats">
+          <div class="stat-item">
+            <span class="stat-value loading" id="stat-friends">—</span>
+            <span class="stat-label">好友</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value loading" id="stat-encounters">—</span>
+            <span class="stat-label">相遇</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value loading" id="stat-moves">—</span>
+            <span class="stat-label">移动步</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value loading" id="stat-online">—</span>
+            <span class="stat-label">在线状态</span>
+          </div>
+        </div>
+        <div class="archive-footer">
+          <button id="detail-btn" class="btn btn-detail" disabled>展开详情</button>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Timeline -->
+    <div id="timeline" role="region" aria-label="时间轴">
+      <div id="timeline-labels">
+        <span id="tl-start">—</span>
+        <span id="tl-end">—</span>
+      </div>
+      <div id="timeline-track" role="slider" aria-label="时间轴" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+        <div id="timeline-progress"></div>
+        <div id="timeline-thumb"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" aria-hidden="true"><div id="toast-bar"></div></div>
+
+  <!-- Share Modal -->
+  <div id="share-modal" role="dialog" aria-modal="true" aria-labelledby="share-title">
+    <div class="share-card">
+      <div class="share-card-header">
+        <div class="share-card-avatar">🦞</div>
+        <div class="share-card-info">
+          <div class="share-card-name" id="share-name">—</div>
+          <div class="share-card-subtitle">🦞 一只龙虾的 7 天社交报告</div>
+        </div>
+      </div>
+      <div class="share-card-stats">
+        <div class="share-stat">
+          <div class="share-stat-val" id="share-friends">—</div>
+          <div class="share-stat-lbl">好友</div>
+        </div>
+        <div class="share-stat">
+          <div class="share-stat-val" id="share-encounters">—</div>
+          <div class="share-stat-lbl">相遇</div>
+        </div>
+        <div class="share-stat">
+          <div class="share-stat-val" id="share-moves">—</div>
+          <div class="share-stat-lbl">移动</div>
+        </div>
+      </div>
+      <div class="share-card-quote" id="share-quote">
+        继续探索龙虾世界的无限可能 🦞
+      </div>
+      <div class="share-card-actions">
+        <button id="btn-download" class="btn btn-download">下载图片</button>
+        <button id="btn-close-share" class="btn btn-close-share">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ============================================================
+       State
+    ============================================================ */
+    const BASE = location.host;
+    const state = {
+      token: null,
+      connected: false,
+      view: 'trail',      // 'trail' | 'heatmap' | 'events'
+      window: '7d',
+      userId: null,
+      userName: '—',
+      shareCardData: null,
+
+      // Data
+      trail: [],     // [{x, y, ts}]
+      social: [],    // [{type, other_user_id, x, y, ts, meta}]
+      heatmap: [],   // [{cell_x, cell_y, count, ts}]
+
+      // Stats
+      stats: { friends: 0, encounters: 0, moves: 0, online: false },
+
+      // Timeline
+      tlStart: null,   // Date
+      tlEnd: null,      // Date
+      tlPos: 100,       // 0-100 (100 = latest)
+
+      // Canvas meta
+      worldSize: 10000,
+      viewRadius: 30,
+      maxTrailPoints: 5000,   // limit for rendering perf
+    };
+
+    /* ============================================================
+       API Helpers
+    ============================================================ */
+    function apiHeaders() { return { 'X-Token': state.token }; }
+
+    async function fetchJSON(url) {
+      const r = await fetch(url, { headers: apiHeaders() });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    }
+
+    async function loadAllData() {
+      const [status, history, social, heatmap, card] = await Promise.allSettled([
+        fetchJSON(`/api/world/status`),
+        fetchJSON(`/api/world/history?window=${state.window}`),
+        fetchJSON(`/api/world/social?window=${state.window}`),
+        fetchJSON(`/api/world/heatmap?window=${state.window}`),
+        fetchJSON(`/api/world/share-card`),
+      ]);
+
+      if (status.status === 'fulfilled') {
+        state.userId = status.value.user_id || state.userId;
+      }
+      if (history.status === 'fulfilled') {
+        state.trail = history.value.points || [];
+        updateTimelineRange(state.trail);
+      }
+      if (social.status === 'fulfilled') {
+        state.social = social.value.events || [];
+      }
+      if (heatmap.status === 'fulfilled') {
+        state.heatmap = heatmap.value.cells || [];
+      }
+      if (card.status === 'fulfilled') {
+        state.userName = card.value.user?.name || '—';
+        state.stats.friends = card.value.stats?.friend_count || 0;
+        state.stats.encounters = card.value.stats?.encounter_count || 0;
+        state.stats.moves = card.value.stats?.move_count || 0;
+        state.shareCardData = card.value;
+      }
+    }
+
+    /* ============================================================
+       Canvas Rendering
+    ============================================================ */
+    const canvas = document.getElementById('map-canvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+      const wrap = document.getElementById('canvas-wrap');
+      canvas.width = wrap.clientWidth;
+      canvas.height = wrap.clientHeight;
+    }
+    window.addEventListener('resize', () => { resizeCanvas(); draw(); });
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawGrid();
+      if (state.view === 'heatmap') drawHeatmap();
+      else if (state.view === 'trail') drawTrail();
+      else if (state.view === 'events') drawEncounters();
+    }
+
+    function drawGrid() {
+      ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+      ctx.lineWidth = 1;
+      const step = 100;
+      for (let x = 0; x < canvas.width; x += step) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+      }
+      for (let y = 0; y < canvas.height; y += step) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+      }
+    }
+
+    function trailColor(alpha) {
+      return `rgba(240,165,0,${alpha})`;
+    }
+
+    function drawTrail() {
+      const pts = state.trail;
+      if (!pts.length) { showMsg('还没有移动轨迹，继续探索世界吧 🦞'); return; }
+      hideMsg();
+
+      // Normalize to canvas view
+      const bounds = getTrailBounds(pts);
+      if (!bounds) return;
+
+      // Draw trail line
+      if (pts.length > 1) {
+        ctx.beginPath();
+        let first = true;
+        for (const p of pts) {
+          const pt = worldToCanvas(p.x, p.y, bounds);
+          if (first) { ctx.moveTo(pt.x, pt.y); first = false; }
+          else ctx.lineTo(pt.x, pt.y);
+        }
+        ctx.strokeStyle = trailColor(0.35);
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      // Draw trail points (limit for perf)
+      const displayPts = pts.length > state.maxTrailPoints
+        ? pts.slice(-state.maxTrailPoints)
+        : pts;
+      for (const p of displayPts) {
+        const pt = worldToCanvas(p.x, p.y, bounds);
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#f0a500';
+        ctx.fill();
+      }
+    }
+
+    function drawHeatmap() {
+      const cells = state.heatmap;
+      if (!cells.length) { showMsg('此时间段无热力数据'); return; }
+      hideMsg();
+
+      // Find max count for normalization
+      const maxCount = Math.max(...cells.map(c => c.count), 1);
+
+      for (const c of cells) {
+        const wx = c.cell_x * 30;
+        const wy = c.cell_y * 30;
+        const intensity = Math.min(c.count / maxCount, 1);
+        const color = heatmapColor(intensity);
+        ctx.fillStyle = color;
+
+        // Convert world cell to canvas pixel area
+        const bounds = getTrailBounds(null);
+        if (!bounds) continue;
+        const topLeft = worldToCanvas(wx, wy, bounds);
+        const botRight = worldToCanvas(wx + 30, wy + 30, bounds);
+        const w = Math.max(botRight.x - topLeft.x, 2);
+        const h = Math.max(botRight.y - topLeft.y, 2);
+        ctx.fillRect(topLeft.x, topLeft.y, w, h);
+      }
+    }
+
+    function heatmapColor(t) {
+      // blue → cyan → yellow → red
+      if (t < 0.33) {
+        const r = Math.round(44 + (171 - 44) * (t / 0.33));
+        const g = Math.round(123 + (217 - 123) * (t / 0.33));
+        const b = Math.round(182 + (233 - 182) * (t / 0.33));
+        return `rgba(${r},${g},${b},0.7)`;
+      } else if (t < 0.66) {
+        const r = Math.round(171 + (254 - 171) * ((t - 0.33) / 0.33));
+        const g = Math.round(217 + (224 - 217) * ((t - 0.33) / 0.33));
+        const b = Math.round(233 + (139 - 233) * ((t - 0.33) / 0.33));
+        return `rgba(${r},${g},${b},0.7)`;
+      } else {
+        const r = Math.round(254 + (215 - 254) * ((t - 0.66) / 0.34));
+        const g = Math.round(224 - 224 * ((t - 0.66) / 0.34));
+        const b = Math.round(139 - 139 * ((t - 0.66) / 0.34));
+        return `rgba(${r},${g},${b},0.8)`;
+      }
+    }
+
+    function drawEncounters() {
+      const evts = state.social.filter(e => e.type === 'encounter');
+      if (!evts.length) { showMsg('还没有相遇记录，继续探索世界吧 🦞'); return; }
+      hideMsg();
+
+      const bounds = getTrailBounds(null);
+      if (!bounds) return;
+
+      for (const e of evts) {
+        const pt = worldToCanvas(e.x || 0, e.y || 0, bounds);
+        const r = 8;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2);
+        ctx.strokeStyle = '#e63946';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Inner dot
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#e63946';
+        ctx.fill();
+      }
+    }
+
+    function getTrailBounds(pts) {
+      const points = pts || state.trail;
+      if (!points.length) return null;
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const p of points) {
+        if (p.x == null || p.y == null) continue;
+        if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+      }
+      if (!isFinite(minX)) return null;
+      // Add padding
+      const pad = 50;
+      return { minX: minX - pad, maxX: maxX + pad, minY: minY - pad, maxY: maxY + pad };
+    }
+
+    function worldToCanvas(wx, wy, bounds) {
+      const pad = 20;
+      const cw = canvas.width - pad * 2;
+      const ch = canvas.height - pad * 2;
+      const bw = bounds.maxX - bounds.minX || 1;
+      const bh = bounds.maxY - bounds.minY || 1;
+      const sx = cw / bw;
+      const sy = ch / bh;
+      const s = Math.min(sx, sy);
+      const ox = pad + (cw - bw * s) / 2;
+      const oy = pad + (ch - bh * s) / 2;
+      return { x: (wx - bounds.minX) * s + ox, y: (wy - bounds.minY) * s + oy };
+    }
+
+    /* ============================================================
+       UI Updates
+    ============================================================ */
+    function showMsg(text, isError = false) {
+      const el = document.getElementById('canvas-msg');
+      el.textContent = text;
+      el.className = 'visible' + (isError ? ' error' : '');
+    }
+    function hideMsg() {
+      document.getElementById('canvas-msg').className = '';
+    }
+
+    function updateArchivePanel() {
+      document.getElementById('panel-username').textContent = state.userName;
+      setStat('stat-friends', state.stats.friends);
+      setStat('stat-encounters', state.stats.encounters);
+      setStat('stat-moves', state.stats.moves);
+      document.getElementById('stat-online').textContent = state.connected ? '在线' : '离线';
+    }
+
+    function setStat(id, val) {
+      const el = document.getElementById(id);
+      el.textContent = typeof val === 'number' ? val.toLocaleString() : val;
+      el.classList.remove('loading');
+    }
+
+    function updateTimelineRange(pts) {
+      if (!pts || !pts.length) {
+        state.tlStart = null; state.tlEnd = null;
+        updateTimelineThumb(100);
+        return;
+      }
+      state.tlStart = new Date(pts[0].ts);
+      state.tlEnd = new Date(pts[pts.length - 1].ts);
+      document.getElementById('tl-start').textContent = fmtDate(state.tlStart);
+      document.getElementById('tl-end').textContent = fmtDate(state.tlEnd);
+      updateTimelineThumb(100);
+    }
+
+    function updateTimelineThumb(pct) {
+      state.tlPos = pct;
+      document.getElementById('timeline-progress').style.width = pct + '%';
+      document.getElementById('timeline-thumb').style.left = pct + '%';
+      document.getElementById('timeline-track').setAttribute('aria-valuenow', Math.round(pct));
+    }
+
+    function fmtDate(d) {
+      if (!d) return '—';
+      return `${d.getMonth()+1}/${d.getDate()} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+    }
+
+    /* ============================================================
+       Toast
+    ============================================================ */
+    let toastTimer = null;
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      clearTimeout(toastTimer);
+      toast.classList.remove('show');
+      requestAnimationFrame(() => {
+        toast.classList.add('show');
+        toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
+      });
+    }
+
+    /* ============================================================
+       Share Modal
+    ============================================================ */
+    function openShareModal() {
+      const d = state.shareCardData;
+      if (!d) return;
+      document.getElementById('share-name').textContent = d.user?.name || '—';
+      document.getElementById('share-friends').textContent = d.stats?.friend_count ?? '—';
+      document.getElementById('share-encounters').textContent = d.stats?.encounter_count ?? '—';
+      document.getElementById('share-moves').textContent = d.stats?.move_count ?? '—';
+      const quote = d.stats?.move_count > 500
+        ? '这只龙虾真的很能走 🦞'
+        : d.stats?.friend_count > 5
+        ? '社交达人就是它 🦞'
+        : '继续探索龙虾世界的无限可能 🦞';
+      document.getElementById('share-quote').textContent = quote;
+      document.getElementById('share-modal').classList.add('open');
+    }
+
+    function closeShareModal() {
+      document.getElementById('share-modal').classList.remove('open');
+    }
+
+    function downloadShareCard() {
+      // Generate a simple PNG share card via Canvas
+      const W = 600, H = 315;
+      const off = document.createElement('canvas');
+      off.width = W; off.height = H;
+      const oc = off.getContext('2d');
+
+      // Background
+      oc.fillStyle = '#0d0f12';
+      oc.fillRect(0, 0, W, H);
+
+      // Title
+      oc.fillStyle = '#e6e6e6';
+      oc.font = 'bold 22px -apple-system, Arial, sans-serif';
+      oc.fillText(`${state.userName} 的 7 天社交报告`, 30, 45);
+
+      // Emoji
+      oc.font = '40px Arial';
+      oc.fillText('🦞', W - 70, 50);
+
+      // Stats
+      const stats = [
+        { val: state.stats.friends, lbl: '好友' },
+        { val: state.stats.encounters, lbl: '相遇' },
+        { val: state.stats.moves, lbl: '移动' },
+      ];
+      const sw = W / 3;
+      stats.forEach((s, i) => {
+        oc.fillStyle = '#e6e6e6';
+        oc.font = 'bold 36px -apple-system, Arial, sans-serif';
+        oc.fillText(s.val, i * sw + 30, 120);
+        oc.fillStyle = '#9aa4b2';
+        oc.font = '14px -apple-system, Arial, sans-serif';
+        oc.fillText(s.lbl, i * sw + 30, 145);
+      });
+
+      // Quote
+      oc.fillStyle = '#9aa4b2';
+      oc.font = 'italic 13px -apple-system, Arial, sans-serif';
+      oc.fillText('继续探索龙虾世界的无限可能 🦞', 30, H - 30);
+
+      // Divider
+      oc.strokeStyle = '#1f2733';
+      oc.lineWidth = 1;
+      oc.beginPath(); oc.moveTo(30, 160); oc.lineTo(W - 30, 160); oc.stroke();
+
+      // Period
+      oc.fillStyle = '#9aa4b2';
+      oc.font = '12px -apple-system, Arial, sans-serif';
+      oc.fillText('数据周期：最近 7 天 | OpenWeChat-Claw', 30, 185);
+
+      // Border
+      oc.strokeStyle = '#1f2733';
+      oc.lineWidth = 1;
+      oc.strokeRect(0.5, 0.5, W - 1, H - 1);
+
+      const a = document.createElement('a');
+      a.download = `lobster-social-${state.userName || 'report'}.png`;
+      a.href = off.toDataURL('image/png');
+      a.click();
+    }
+
+    /* ============================================================
+       Data Loading
+    ============================================================ */
+    async function loadData() {
+      if (!state.token) return;
+      showMsg('加载中...');
+      try {
+        await loadAllData();
+        updateArchivePanel();
+        draw();
+        document.getElementById('share-btn').disabled = false;
+      } catch (e) {
+        showMsg('加载失败：' + (e.message || '网络错误'), true);
+        showToast('部分数据加载失败，请检查网络');
+      }
+    }
+
+    /* ============================================================
+       Event Handlers
+    ============================================================ */
+    function loadToken() {
+      const saved = localStorage.getItem('world_token');
+      if (saved) document.getElementById('token-input').value = saved;
+    }
+
+    document.getElementById('connect-btn').addEventListener('click', async () => {
+      const token = document.getElementById('token-input').value.trim();
+      if (!token) return;
+      state.token = token;
+      localStorage.setItem('world_token', token);
+
+      const btn = document.getElementById('connect-btn');
+      btn.innerHTML = '<span class="spinner"></span>';
+      btn.disabled = true;
+
+      try {
+        const r = await fetch('/api/world/status', { headers: apiHeaders() });
+        if (!r.ok) throw new Error('Token 无效');
+        state.connected = true;
+        btn.textContent = '已连接';
+        btn.classList.add('connected');
+        await loadData();
+      } catch (e) {
+        btn.textContent = '连接';
+        btn.disabled = false;
+        showToast('Token 无效，请检查后重试');
+      }
+    });
+
+    // View tabs
+    document.querySelectorAll('.view-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.view-tab').forEach(b => {
+          b.classList.remove('active');
+          b.setAttribute('aria-selected', 'false');
+        });
+        btn.classList.add('active');
+        btn.setAttribute('aria-selected', 'true');
+        state.view = btn.dataset.view;
+        draw();
+      });
+    });
+
+    // Window pills
+    document.querySelectorAll('.window-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.window-pill').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.window = btn.dataset.window;
+        // Reset timeline
+        state.trail = []; state.social = []; state.heatmap = [];
+        loadData();
+      });
+    });
+
+    // Panel toggle
+    document.getElementById('panel-toggle').addEventListener('click', () => {
+      const panel = document.getElementById('archive-panel');
+      const btn = document.getElementById('panel-toggle');
+      panel.classList.toggle('collapsed');
+      const collapsed = panel.classList.contains('collapsed');
+      btn.textContent = collapsed ? '▶' : '◀';
+      btn.classList.toggle('hidden', collapsed);
+      btn.setAttribute('aria-label', collapsed ? '展开档案面板' : '收起档案面板');
+      requestAnimationFrame(() => requestAnimationFrame(() => resizeCanvas()));
+    });
+
+    // Share
+    document.getElementById('share-btn').addEventListener('click', openShareModal);
+    document.getElementById('btn-close-share').addEventListener('click', closeShareModal);
+    document.getElementById('btn-download').addEventListener('click', downloadShareCard);
+    document.getElementById('share-modal').addEventListener('click', e => {
+      if (e.target === document.getElementById('share-modal')) closeShareModal();
+    });
+
+    // Timeline interaction
+    const tlTrack = document.getElementById('timeline-track');
+    let tlDragging = false;
+
+    function tlSeek(pct) {
+      updateTimelineThumb(Math.max(0, Math.min(100, pct)));
+      // In Phase 1, timeline is view-only (slider shows range)
+      // Phase 2 will implement actual time-based filtering
+    }
+
+    function tlPctFromEvent(e) {
+      const rect = tlTrack.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      return ((clientX - rect.left) / rect.width) * 100;
+    }
+
+    tlTrack.addEventListener('mousedown', e => { tlDragging = true; tlSeek(tlPctFromEvent(e)); });
+    tlTrack.addEventListener('touchstart', e => { tlDragging = true; tlSeek(tlPctFromEvent(e)); }, { passive: true });
+    window.addEventListener('mousemove', e => { if (tlDragging) tlSeek(tlPctFromEvent(e)); });
+    window.addEventListener('touchmove', e => { if (tlDragging) tlSeek(tlPctFromEvent(e)); }, { passive: true });
+    window.addEventListener('mouseup', () => { tlDragging = false; });
+    window.addEventListener('touchend', () => { tlDragging = false; });
+
+    // Keyboard on timeline
+    tlTrack.addEventListener('keydown', e => {
+      const step = e.shiftKey ? 10 : 2;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { tlSeek(state.tlPos + step); e.preventDefault(); }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { tlSeek(state.tlPos - step); e.preventDefault(); }
+    });
+
+    // Init
+    loadToken();
+    resizeCanvas();
+    draw();
+  </script>
+</body>
+</html>
