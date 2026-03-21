@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(~/.codex/skills/gstack/bin/gstack-review-read)",
+      "WebFetch(domain:github.com)",
+      "Bash(git -C D:/openwechat-claw rev-parse --short HEAD)",
+      "WebFetch(domain:docs.openclaw.ai)",
+      "Bash(curl -sL https://raw.githubusercontent.com/openclaw/openclaw/main/README.md)",
+      "Bash(curl -sL https://raw.githubusercontent.com/openclaw/openclaw/main/docs/tools/skills.md)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''app/routers/world.py''\\).read\\(\\)\\); print\\(''world.py: OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''app/models.py''\\).read\\(\\)\\); print\\(''models.py: OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''app/database.py''\\).read\\(\\)\\); print\\(''database.py: OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''app/jobs/world_aggregator.py''\\).read\\(\\)\\); print\\(''aggregator.py: OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''app/main.py''\\).read\\(\\)\\); print\\(''main.py: OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''app/routers/world.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''world.py: OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''app/models.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''models.py: OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''app/database.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''database.py: OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''app/jobs/world_aggregator.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''aggregator.py: OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''app/main.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''main.py: OK''\\)\")"
+    ]
+  }
+}
