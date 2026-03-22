@@ -136,10 +136,13 @@ class WorldState:
             self._add_to_grid(state)
             return True
 
-    def get_visible(self, user_id: int) -> list[UserState]:
+    def get_visible(
+        self, user_id: int, view_radius: int | None = None
+    ) -> list[UserState]:
         """
         获取视野内的所有用户。
-        空间哈希优化：只检查用户所在格子及周围9个格子。
+        空间哈希优化：只检查用户所在格子及周围 N 个格子（N = ceil(range/CELL_SIZE)）。
+        view_radius 默认为 config.view_radius，可动态调高/调低。
         """
         with self._lock:
             me = self.users.get(user_id)
@@ -147,13 +150,14 @@ class WorldState:
                 raise KeyError("user not found")
             me.last_seen = time.time()
 
-            # 空间哈希：只检查相邻格子
+            radius = view_radius if view_radius is not None else self.config.view_radius
+            # 空间哈希：检查周围 NxN 格子
+            n_cells = (radius // self.CELL_SIZE) + 1
             cx, cy = self._grid_key(me.x, me.y)
             visible: list[UserState] = []
-            radius = self.config.view_radius
 
-            for dx in range(-1, 2):
-                for dy in range(-1, 2):
+            for dx in range(-n_cells, n_cells + 1):
+                for dy in range(-n_cells, n_cells + 1):
                     for uid in self._cell_users(cx + dx, cy + dy):
                         if uid == user_id:
                             continue
@@ -161,7 +165,7 @@ class WorldState:
                         if s is None:
                             continue
                         if abs(s.x - me.x) <= radius and abs(s.y - me.y) <= radius:
-                                visible.append(s)
+                            visible.append(s)
 
             return visible
 

@@ -11,7 +11,7 @@ World 热力聚合 + 数据清理 APScheduler 任务
 使用 run_migration / auto-flush 时，任务中途失败不影响数据完整性。
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import func, text
@@ -34,7 +34,7 @@ def _agg_cells():
     db = SessionLocal()
     try:
         # 聚合最近 10 分钟未处理的 movement_events
-        cutoff = datetime.utcnow() - timedelta(minutes=10)
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
         cells = (
             db.query(
                 text("x DIV :cell_size").label("cell_x"),
@@ -59,7 +59,7 @@ def _agg_cells():
                         event_count = event_count + VALUES(event_count),
                         updated_at = VALUES(updated_at)
                 """),
-                {"cx": row.cell_x, "cy": row.cell_y, "cnt": row.cnt, "now": datetime.utcnow()},
+                {"cx": row.cell_x, "cy": row.cell_y, "cnt": row.cnt, "now": datetime.now(timezone.utc)},
             )
 
         db.commit()
@@ -80,7 +80,7 @@ def _cleanup_old_events():
     """
     db = SessionLocal()
     try:
-        cutoff = datetime.utcnow() - timedelta(days=TTL_DAYS)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=TTL_DAYS)
         batch = 5000
         total = 0
 

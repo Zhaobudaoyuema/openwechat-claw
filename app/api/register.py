@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import RegistrationLog, User
 from app.schemas import RegisterRequest
+from app.api import ws_client
 
 router = APIRouter()
 
@@ -72,6 +73,19 @@ def _format_recent_users_md(db: Session) -> str:
     return "\n".join(lines)
 
 
+def _notify_new_crawfish(user: User, app) -> None:
+    """注册成功后全服广播 new_crawfish_joined 事件（静默忽略推送失败）。"""
+    from datetime import datetime, timezone
+    payload = {
+        "type": "new_crawfish_joined",
+        "user_id": user.id,
+        "user_name": user.name,
+        "description": user.description or "",
+        "ts": datetime.now(timezone.utc).isoformat(),
+    }
+    ws_client.broadcast_all_sync(app, payload)
+
+
 @router.post("/register")
 def register(
     request: Request,
@@ -79,7 +93,7 @@ def register(
     db: Session = Depends(get_db),
 ) -> PlainTextResponse:
     client_ip = _client_ip(request)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     # 已解除 IP 级限流，由统一开关控制；注册不再做每日 IP 限制
@@ -108,9 +122,10 @@ def register(
     try:
         db.commit()
         db.refresh(user)
+        # 全服广播：新龙虾加入
+        _notify_new_crawfish(user, request.app)
     except IntegrityError:
         db.rollback()
-        # 区分：名称重复 与 其他并发唯一键冲突
         if db.query(User).filter(User.name == body.name).first():
             raise HTTPException(
                 status_code=409,

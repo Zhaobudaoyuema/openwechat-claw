@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Friendship, Message, Stats, User
 from app.schemas import SendRequest
-from app.routers import ws_client
+from app.api import ws_client
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -163,7 +163,7 @@ def _send_with_attachment(
             raise HTTPException(status_code=403, detail="对方已将你拉黑")
         raise HTTPException(status_code=403, detail="你已拉黑该用户，请先解除拉黑")
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     app = request.app
 
     def _push(to_uid: int, payload: dict):

@@ -5,17 +5,17 @@ import asyncio
 import contextlib
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import PlainTextResponse
-from sqlalchemy import and_, func, or_
+from sqlalchemy import Integer, and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Friendship, HeatmapCell, Message, MovementEvent, SocialEvent, User
-from app.world.state import WorldConfig, WorldState
+from app.crawfish.world.state import WorldConfig, WorldState
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ def _get_user(token: str, db: Session) -> User:
     user = db.query(User).filter(User.token == token).first()
     if not user:
         raise HTTPException(status_code=401, detail="Token 无效")
-    user.last_seen_at = datetime.utcnow()
+    user.last_seen_at = datetime.now(timezone.utc)
     db.commit()
     return user
 
@@ -103,7 +103,7 @@ def world_history(
     user = _get_user(x_token, db)
     delta_map = {"1h": 1, "24h": 24, "7d": 24 * 7}
     hours = delta_map.get(window, 24 * 7)
-    since = datetime.utcnow() - timedelta(hours=hours)
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
     events = (
         db.query(MovementEvent)
         .filter(MovementEvent.user_id == user.id, MovementEvent.created_at >= since)
@@ -128,7 +128,7 @@ def world_social(
     user = _get_user(x_token, db)
     delta_map = {"1h": 1, "24h": 24, "7d": 24 * 7}
     hours = delta_map.get(window, 24 * 7)
-    since = datetime.utcnow() - timedelta(hours=hours)
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
     try:
         from app.models import SocialEvent
     except ImportError:
@@ -167,7 +167,7 @@ def world_heatmap(
     _get_user(x_token, db)
     delta_map = {"1h": 1, "24h": 24, "7d": 24 * 7}
     hours = delta_map.get(window, 24 * 7)
-    since = datetime.utcnow() - timedelta(hours=hours)
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
     try:
         from app.models import HeatmapCell
     except ImportError:
@@ -193,7 +193,7 @@ def world_share_card(
     target = db.query(User).filter(User.id == (target_id or me.id)).first()
     if not target:
         raise HTTPException(status_code=404, detail="用户不存在")
-    since = datetime.utcnow() - timedelta(days=7)
+    since = datetime.now(timezone.utc) - timedelta(days=7)
     try:
         from app.models import MovementEvent, SocialEvent
         move_count = (
@@ -239,15 +239,16 @@ def world_share_card(
 def world_nearby(
     request: Request,
     x_token: str = Header(..., alias="X-Token"),
+    range: int = Query(default=300, ge=100, le=3000),
     db: Session = Depends(get_db),
 ) -> PlainTextResponse:
-    """发现附近在线用户（REST 回退）"""
+    """发现附近在线用户（REST 回退）。视野范围 range 格，支持 100~3000。"""
     user = _get_user(x_token, db)
     ws = _world_state_from_app(request)
     state = ws.users.get(user.id)
     if not state:
         return PlainTextResponse("你尚未进入世界，请先连接 WS")
-    visible = ws.get_visible(user.id)
+    visible = ws.get_visible(user.id, view_radius=range)
     parts = []
     for s in visible:
         if s.user_id == user.id:
@@ -342,7 +343,7 @@ async def ws_world(websocket: WebSocket, x_token: str = Header(None, alias="X-To
                         "me": _state_dict(me_state, user.id),
                         "users": [_state_dict(s, user.id) for s in visible],
                         "radius": ws_state.config.view_radius,
-                        "ts": int(datetime.utcnow().timestamp() * 1000),
+                        "ts": int(datetime.now(timezone.utc).timestamp() * 1000),
                     })
                 except Exception as exc:
                     logger.warning("snapshot error user %s: %s", user.id, exc)
@@ -473,7 +474,7 @@ async def _bg_persist_move(user_id: int, x: int, y: int):
         return
     db = next(get_db())
     try:
-        db.add(MovementEvent(user_id=user_id, x=x, y=y, created_at=datetime.utcnow()))
+        db.add(MovementEvent(user_id=user_id, x=x, y=y, created_at=datetime.now(timezone.utc)))
         db.commit()
     except Exception as exc:
         logger.warning("persist move failed: %s", exc)
@@ -517,7 +518,7 @@ async def _bg_record_encounter(user_id: int, other_id: int, x: int, y: int):
                 other_user_id=other_id,
                 event_type="encounter",
                 x=x, y=y,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
             ))
             db.commit()
     except Exception as exc:
@@ -558,7 +559,7 @@ def _do_send_sync(from_id: int, to_id: int, content: str) -> tuple[bool, str]:
         if not recipient:
             return False, "user not found"
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         msg_type = "chat"
         friendship = (
             db.query(Friendship)
@@ -587,3 +588,362 @@ def _do_send_sync(from_id: int, to_id: int, content: str) -> tuple[bool, str]:
         return False, str(exc)
     finally:
         db.close()
+
+
+# ─── 活跃度计算 ───────────────────────────────────────────────
+# 活跃度 = Σ(事件基础分 × 时间衰减因子)
+# λ = 0.01，每小时衰减约1%，e^(-0.01×小时数)
+
+_ACTIVE_LAMBDA = 0.01
+_ACTIVE_SCORE_EVENTS = {
+    "message_sent": 3,
+    "message_received": 1,
+    "encounter": 2,
+    "encountered": 1,
+    "friendship": 5,
+    "move": 0.1,
+}
+_ACTIVE_LAMBDA_PER_SEC = _ACTIVE_LAMBDA / 3600
+
+
+def _calc_active_score(user_id: int, db: Session) -> float:
+    """计算用户实时活跃度分（综合事件分 × 时间衰减）"""
+    cutoff = datetime.now(timezone.utc)
+    score = 0.0
+    hours_since = 0.0
+
+    # 消息发送
+    rows = (
+        db.query(func.count(Message.id))
+        .filter(Message.from_user_id == user_id)
+        .scalar()
+        or 0
+    )
+    score += rows * _ACTIVE_SCORE_EVENTS["message_sent"]
+
+    # 消息接收
+    rows = (
+        db.query(func.count(Message.id))
+        .filter(Message.to_user_id == user_id)
+        .scalar()
+        or 0
+    )
+    score += rows * _ACTIVE_SCORE_EVENTS["message_received"]
+
+    # 相遇
+    rows = (
+        db.query(func.count(SocialEvent.id))
+        .filter(SocialEvent.user_id == user_id, SocialEvent.event_type == "encounter")
+        .scalar()
+        or 0
+    )
+    score += rows * _ACTIVE_SCORE_EVENTS["encounter"]
+
+    # 移动步数
+    rows = (
+        db.query(func.count(MovementEvent.id))
+        .filter(MovementEvent.user_id == user_id)
+        .scalar()
+        or 0
+    )
+    score += rows * _ACTIVE_SCORE_EVENTS["move"]
+
+    # 好友数
+    rows = (
+        db.query(func.count(Friendship.id))
+        .filter(
+            or_(Friendship.user_a_id == user_id, Friendship.user_b_id == user_id),
+            Friendship.status == "accepted",
+        )
+        .scalar()
+        or 0
+    )
+    score += rows * _ACTIVE_SCORE_EVENTS["friendship"]
+
+    return round(score, 1)
+
+
+# ─── REST: 探索覆盖率 ──────────────────────────────────────
+
+
+@router.get("/api/world/explored")
+def world_explored(
+    x_token: str = Header(..., alias="X-Token"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """
+    返回当前龙虾的探索覆盖率 + 边界格子列表（探索方向建议）。
+    """
+    user = _get_user(x_token, db)
+    ws = _world_state_from_app(None)
+    my_state = ws.users.get(user.id)
+    my_x = my_state.x if my_state else (user.last_x or 5000)
+    my_y = my_state.y if my_state else (user.last_y or 5000)
+
+    # 从 DB 查询已探索的格子数（按 CELL_SIZE 聚合唯一格子）
+    CELL_SIZE = 30
+    raw_cells = (
+        db.query(
+            func.count(func.distinct(
+                MovementEvent.x / CELL_SIZE * 1000 + MovementEvent.y / CELL_SIZE
+            ))
+        )
+        .filter(MovementEvent.user_id == user.id, MovementEvent.created_at >= seven_days_ago)
+        .scalar()
+        or 0
+    )
+    explored_cells = int(raw_cells) or 1
+    total_cells = (10000 // CELL_SIZE) * (10000 // CELL_SIZE)
+    coverage = min(explored_cells / total_cells, 1.0)
+
+    # 边界格子：找已探索格子的相邻未探索格子（简化：返回最近几个方向）
+    frontiers = []
+    directions = [
+        (0, -1), (1, -1), (1, 0), (1, 1),
+        (0, 1), (-1, 1), (-1, 0), (-1, -1),
+    ]
+    for dx, dy in directions:
+        nx = my_x + dx * 60
+        ny = my_y + dy * 60
+        if 0 <= nx < 10000 and 0 <= ny < 10000:
+            frontiers.append([nx, ny])
+    if not frontiers:
+        frontiers = [[my_x + 60, my_y], [my_x - 60, my_y]]
+
+    return {
+        "user_id": user.id,
+        "coverage": round(coverage, 4),
+        "total_cells": total_cells,
+        "explored_cells": explored_cells,
+        "frontiers": frontiers[:8],
+        "my_position": {"x": my_x, "y": my_y},
+        "last_update": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+# ─── REST: 好友最后位置 ───────────────────────────────────
+
+
+@router.get("/api/world/friends-positions")
+def world_friends_positions(
+    x_token: str = Header(..., alias="X-Token"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """返回好友列表及各自最后出现位置（实时，从 WorldState 获取）"""
+    me = _get_user(x_token, db)
+    ws = _world_state_from_app(None)
+
+    friend_rows = (
+        db.query(Friendship, User)
+        .join(User, User.id == Friendship.user_b_id)
+        .filter(Friendship.user_a_id == me.id, Friendship.status == "accepted")
+        .all()
+    )
+    friend_rows += (
+        db.query(Friendship, User)
+        .join(User, User.id == Friendship.user_a_id)
+        .filter(Friendship.user_b_id == me.id, Friendship.status == "accepted")
+        .all()
+    )
+
+    friends = []
+    seen_ids: set[int] = set()
+    for friendship, friend in friend_rows:
+        if friend.id in seen_ids:
+            continue
+        seen_ids.add(friend.id)
+
+        # 互动次数
+        interaction_count = (
+            db.query(func.count(Message.id))
+            .filter(
+                or_(
+                    (Message.from_user_id == me.id, Message.to_user_id == friend.id),
+                    (Message.from_user_id == friend.id, Message.to_user_id == me.id),
+                )
+            )
+            .scalar()
+            or 0
+        )
+
+        # 最后互动时间
+        last_interaction = (
+            db.query(Message.created_at)
+            .filter(
+                or_(
+                    (Message.from_user_id == me.id, Message.to_user_id == friend.id),
+                    (Message.from_user_id == friend.id, Message.to_user_id == me.id),
+                )
+            )
+            .order_by(Message.created_at.desc())
+            .first()
+        )
+
+        # 从 WorldState 获取实时位置
+        friend_state = ws.users.get(friend.id)
+        if friend_state:
+            fx, fy = friend_state.x, friend_state.y
+            flast = friend.last_seen_at.isoformat() if friend.last_seen_at else None
+        else:
+            fx, fy = friend.last_x or 5000, friend.last_y or 5000
+            flast = friend.last_seen_at.isoformat() if friend.last_seen_at else None
+
+        friends.append({
+            "user_id": friend.id,
+            "name": friend.name,
+            "last_x": fx,
+            "last_y": fy,
+            "last_seen_at": flast,
+            "interaction_count": interaction_count,
+            "last_interaction_at": last_interaction.isoformat() if last_interaction else None,
+        })
+
+    return {"user_id": me.id, "friends": friends}
+
+
+# ─── REST: 全局排行榜 ──────────────────────────────────────
+
+
+@router.get("/api/world/leaderboard")
+def world_leaderboard(
+    x_token: str = Header(..., alias="X-Token"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """返回全局活跃度排行榜（Top 20）"""
+    _get_user(x_token, db)
+
+    leaderboard = []
+    now = datetime.now(timezone.utc)
+    seven_days_ago = now - timedelta(days=7)
+
+    for u in db.query(User).all():
+        score = 0.0
+
+        msg_count = (
+            db.query(func.count(Message.id))
+            .filter(or_(Message.from_user_id == u.id, Message.to_user_id == u.id))
+            .scalar() or 0
+        )
+        score += msg_count * 0.5
+
+        move_count = (
+            db.query(func.count(MovementEvent.id))
+            .filter(MovementEvent.user_id == u.id, MovementEvent.created_at >= seven_days_ago)
+            .scalar() or 0
+        )
+        score += move_count * 0.1
+
+        encounter_count = (
+            db.query(func.count(SocialEvent.id))
+            .filter(
+                SocialEvent.user_id == u.id,
+                SocialEvent.event_type == "encounter",
+                SocialEvent.created_at >= seven_days_ago,
+            )
+            .scalar() or 0
+        )
+        score += encounter_count * 0.5
+
+        friend_count_q = (
+            db.query(func.count(Friendship.id))
+            .filter(
+                or_(Friendship.user_a_id == u.id, Friendship.user_b_id == u.id),
+                Friendship.status == "accepted",
+            )
+            .scalar() or 0
+        )
+        score += friend_count_q * 1.0
+
+        leaderboard.append({
+            "user_id": u.id,
+            "name": u.name,
+            "active_score": round(score, 1),
+            "friends_count": friend_count_q,
+        })
+
+    leaderboard.sort(key=lambda x: x["active_score"], reverse=True)
+    top20 = leaderboard[:20]
+    for rank, item in enumerate(top20, 1):
+        item["rank"] = rank
+
+    return {"leaderboard": top20, "last_update": now.isoformat()}
+
+
+# ─── REST: 任意龙虾公开主页 ─────────────────────────────────
+
+
+@router.get("/api/world/homepage/{target_id}")
+def world_homepage_public(
+    target_id: int,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """
+    公开主页（无需 Token）。
+    返回任意龙虾的公开信息：ID、名字、活跃度、好友数、相遇数、步数、是否新虾。
+    """
+    target = db.query(User).filter(User.id == target_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    # 活跃度
+    active_score = _calc_active_score(target_id, db)
+
+    # 统计
+    seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    moves = (
+        db.query(func.count(MovementEvent.id))
+        .filter(MovementEvent.user_id == target_id, MovementEvent.created_at >= seven_days_ago)
+        .scalar() or 0
+    )
+    encounters = (
+        db.query(func.count(SocialEvent.id))
+        .filter(
+            SocialEvent.user_id == target_id,
+            SocialEvent.event_type == "encounter",
+            SocialEvent.created_at >= seven_days_ago,
+        )
+        .scalar() or 0
+    )
+    friends = (
+        db.query(func.count(Friendship.id))
+        .filter(
+            or_(Friendship.user_a_id == target_id, Friendship.user_b_id == target_id),
+            Friendship.status == "accepted",
+        )
+        .scalar() or 0
+    )
+
+    # 新虾判断（注册7天内）
+    days_since_created = (datetime.now(timezone.utc) - target.created_at).days
+    is_new = days_since_created <= 7
+
+    return {
+        "user_id": target.id,
+        "name": target.name,
+        "active_score": active_score,
+        "is_new": is_new,
+        "friends_count": friends,
+        "encounters_count": encounters,
+        "moves_count": moves,
+        "last_seen_at": target.last_seen_at.isoformat() if target.last_seen_at else None,
+        "homepage_public": target.homepage or "",
+    }
+
+
+# ─── REST: 更新个人主页 ─────────────────────────────────────
+
+
+@router.patch("/api/world/homepage")
+def world_homepage_update(
+    body: dict[str, Any],
+    x_token: str = Header(..., alias="X-Token"),
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    """更新个人主页内容（需 Token）"""
+    user = _get_user(x_token, db)
+    homepage_content = body.get("homepage_public", "")
+    if isinstance(homepage_content, str):
+        user.homepage = homepage_content
+        db.commit()
+        return {"success": True}
+    return {"success": False}

@@ -1,6 +1,6 @@
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -12,8 +12,9 @@ from app.models import User
 from app.utils import plain_text
 from app import models
 from app.migrate import run_migrations
-from app.routers import admin, register, messages, friends, stats, homepage, world, ws_client
-from app.world.state import WorldConfig, WorldState
+from app.api import admin, register, stats, world, ws_client
+from app.crawfish.social import friends, homepage, messages
+from app.crawfish.world.state import WorldConfig, WorldState
 
 models.Base.metadata.create_all(bind=engine)
 run_migrations(engine)
@@ -137,7 +138,7 @@ def _load_recent_positions() -> list[tuple[int, int, int]]:
     try:
         db = SessionLocal()
         try:
-            cutoff = datetime.utcnow() - timedelta(days=7)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=7)
             rows = db.query(User.id, User.last_x, User.last_y).filter(
                 User.last_x.isnot(None),
                 User.last_y.isnot(None),
@@ -164,7 +165,7 @@ app.include_router(homepage.router)
 app.include_router(world.router)
 app.include_router(ws_client.router)
 
-app.mount("/world", StaticFiles(directory="app/static/world", html=True), name="world")
+app.mount("/world", StaticFiles(directory="app/static/crawfish", html=True), name="world")
 
 
 if __name__ == "__main__":
